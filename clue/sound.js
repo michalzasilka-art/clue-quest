@@ -26,6 +26,8 @@ export const sfx = {
   right: () => [72, 76, 79, 84].forEach((n, i) => tone(N(n), i * .07, .09)),
   wrong: () => { tone(N(55), 0, .14, 'square', .4); tone(N(50), .14, .28, 'square', .4, -40); },
   reveal: () => { tone(N(67), 0, .08); tone(N(74), .1, .08); tone(N(79), .2, .2, 'triangle', .6); },
+  fly: () => { for (let i = 0; i < 10; i++) tone(N(60 + i * 2), i * .05, .07, 'square', .22); tone(N(84), .52, .25, 'triangle', .5); },
+  pop: () => { tone(N(90), 0, .03, 'square', .4); tone(N(70), .03, .06, 'square', .3, -200); },
   fanfare: () => [[67, 0], [67, .12], [67, .24], [72, .36], [76, .6], [79, .78], [84, .96]].forEach(([n, t], i) => tone(N(n), t, i === 6 ? .5 : .14, 'square', .45)),
 };
 // a little looping lobby tune (teacher screen only)

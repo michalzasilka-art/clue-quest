@@ -1,14 +1,14 @@
-// Clue Quest, a student's phone: game code (or straight in from the QR code) → name + hero → wait → each round
-// read the clue and tap one of 3 words → right/wrong, points and your place → final place.
+// Clue Quest, a student's phone: game code (or straight in from the QR code) → hero, hat and name → wait → each
+// round read the clue and tap one of 3 words → right/wrong, metres climbed, streak bonus, height and place → final.
 import { $, $$, esc, store, show, ordinal } from './ui.js';
 import { phoneWorld } from './world.js';
-import { HEROES, heroById, spriteURL } from './sprites.js';
+import { HEROES, HATS, spriteURL, hatURL, balloonsURL } from './sprites.js';
 import { joinGame, cleanCode } from './net.js';
 import { sfx, unlock } from './sound.js';
 
 phoneWorld($('#sky'));
 const LETTERS = ['a', 'b', 'c'];
-const img = (id, cls = '') => `<img class="px-img ${cls}" src="${spriteURL(id)}" alt="">`;
+const flyer = (id) => `<div class="flyer ${id}"><img class="px-img fbal" alt=""><img class="px-img fhero" alt=""></div>`;
 
 $('#app').innerHTML = `
 <section class="screen" id="join"><div class="col">
@@ -19,17 +19,20 @@ $('#app').innerHTML = `
     <p class="err" id="joinErr"></p>
     <button class="btn px" id="codeGo">NEXT ▶</button>
   </div>
-  <p class="hint">The code is on the big screen.</p>
-  <div class="join-crew">${HEROES.map((h, i) => `<img class="px-img hop" style="animation-delay:${-i * .13}s" src="${spriteURL(h.id)}" alt="">`).join('')}</div>
+  <p class="hint">Type the code from the big screen, or scan its QR code.</p>
+  <div class="join-crew">${HEROES.map((h, i) => `<img class="px-img hop" style="animation-delay:${-i * .13}s" src="${spriteURL(h.id, { hat: HATS[(i % (HATS.length - 1)) + 1].id })}" alt="">`).join('')}</div>
 </div></section>
 
 <section class="screen" id="me" hidden><div class="col">
   <div class="code-chip px" id="meCode">GAME ------</div>
+  ${flyer('pick')}
   <div class="card px">
-    <h2>YOUR NAME</h2>
-    <input class="namebox" id="nameIn" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Your name">
-    <h2 style="margin-top:14px">PICK A HERO</h2>
+    <h2>PICK A HERO</h2>
     <div class="heroes" id="heroes"></div>
+    <h2 style="margin-top:16px">PICK A HAT</h2>
+    <div class="hats" id="hats"></div>
+    <h2 style="margin-top:16px">YOUR NAME</h2>
+    <input class="namebox" id="nameIn" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Your name">
     <p class="err" id="meErr"></p>
     <button class="btn px green" id="meGo">JOIN GAME ▶</button>
   </div>
@@ -38,15 +41,15 @@ $('#app').innerHTML = `
 <section class="screen" id="wait" hidden><div class="col">
   <div class="spacer"></div>
   <div class="wait-msg" id="waitTop">YOU'RE IN!</div>
-  <div><img class="px-img big-hero hop" id="waitHero" alt=""><div class="ground"></div></div>
+  ${flyer('waiting')}
   <div class="me-name" id="waitName"></div>
-  <div class="wait-msg blink" id="waitMsg">LOOK AT THE BIG SCREEN.<br>THE GAME STARTS SOON.</div>
+  <div class="wait-msg blink" id="waitMsg">FIND YOURSELF IN THE VILLAGE<br>ON THE BIG SCREEN!</div>
   <div class="spacer"></div>
-  <button class="btn px ghost" id="changeHero">CHANGE HERO</button>
+  <button class="btn px ghost" id="changeHero">CHANGE HERO OR HAT</button>
 </div></section>
 
 <section class="screen" id="q" hidden><div class="col">
-  <div class="ptop"><div class="px" id="pNum">1/10</div><div class="tbar"><i id="tbar"></i></div><div class="px" id="pScore">0</div></div>
+  <div class="ptop"><div class="px" id="pNum">1/10</div><div class="tbar"><i id="tbar"></i></div><div class="px" id="pScore">0 m</div></div>
   <div class="px" id="pclue"><small>WHAT IS IT?</small><span id="pclueText"></span></div>
   <div class="pans" id="pans"></div>
   <div class="locked" id="locked" hidden>ANSWER LOCKED IN!<br><span class="blink">WAIT FOR THE OTHERS…</span></div>
@@ -54,17 +57,17 @@ $('#app').innerHTML = `
 
 <section class="screen" id="res" hidden><div class="col">
   <div class="verdict" id="verdict"></div>
-  <div><img class="px-img big-hero" id="resHero" alt=""><div class="ground"></div></div>
-  <div class="res-card px"><div class="lbl">THE WORD WAS</div><div class="w" id="resWord"></div><div class="pts" id="resPts"></div></div>
-  <div class="stats"><div class="px"><span class="tag">SCORE</span><b id="resScore">0</b></div><div class="px"><span class="tag">PLACE</span><b id="resPlace">-</b></div></div>
+  ${flyer('result')}
+  <div class="res-card px"><div class="lbl">THE WORD WAS</div><div class="w" id="resWord"></div><div class="pts" id="resPts"></div><div class="bonus" id="resBonus"></div></div>
+  <div class="stats"><div class="px"><span class="tag">HEIGHT</span><b id="resScore">0 m</b></div><div class="px"><span class="tag">PLACE</span><b id="resPlace">-</b></div></div>
   <p class="hint" id="resHint">Look at the big screen.</p>
 </div></section>
 
 <section class="screen" id="end" hidden><div class="col">
   <div class="spacer"></div>
   <div class="verdict" id="endTitle">GAME OVER</div>
-  <div><img class="px-img big-hero hop" id="endHero" alt=""><div class="ground"></div></div>
-  <div class="stats"><div class="px"><span class="tag">PLACE</span><b id="endPlace">-</b></div><div class="px"><span class="tag">SCORE</span><b id="endScore">0</b></div></div>
+  ${flyer('final')}
+  <div class="stats"><div class="px"><span class="tag">PLACE</span><b id="endPlace">-</b></div><div class="px"><span class="tag">HEIGHT</span><b id="endScore">0 m</b></div></div>
   <p class="hint">Thanks for playing! Wait for the teacher to start the next game.</p>
   <div class="spacer"></div>
 </div></section>
@@ -80,10 +83,19 @@ $('#app').innerHTML = `
 const saved = store.get('clue-me', {});
 const me = {
   pid: saved.pid || Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join(''),
-  name: saved.name || '', char: HEROES.some((h) => h.id === saved.char) ? saved.char : HEROES[(Math.random() * HEROES.length) | 0].id,
+  name: saved.name || '',
+  char: HEROES.some((h) => h.id === saved.char) ? saved.char : HEROES[(Math.random() * HEROES.length) | 0].id,
+  hat: HATS.some((h) => h.id === saved.hat) ? saved.hat : 'santa',
 };
-const save = () => store.set('clue-me', { pid: me.pid, name: me.name, char: me.char, code: game ? game.code : saved.code, at: Date.now() });
-let game = null, code = '', editing = false, cur = null, picked = null, tbarT = null, joining = false;
+const save = () => store.set('clue-me', { pid: me.pid, name: me.name, char: me.char, hat: me.hat, code: game ? game.code : saved.code, at: Date.now() });
+let game = null, code = '', editing = false, cur = null, picked = null, tbarT = null, joining = false, streak = 0;
+// a hero hanging from balloons (more balloons with a streak, a golden one from 3 in a row)
+function drawFlyer(which, s = streak) {
+  for (const f of $$('.flyer.' + which)) {
+    f.querySelector('.fhero').src = spriteURL(me.char, { hat: me.hat, scale: 6 });
+    f.querySelector('.fbal').src = balloonsURL(3 + Math.min(3, s), s >= 3, 1, 6);
+  }
+}
 
 // ---------- code ----------
 const codeIn = $('#codeIn');
@@ -101,18 +113,21 @@ function goCode() {
   code = c; sfx.tap(); openMe(false);
 }
 
-// ---------- name + hero ----------
-function drawHeroes() {
-  $('#heroes').innerHTML = HEROES.map((h) => `<button class="hero${h.id === me.char ? ' on' : ''}" data-id="${h.id}">${img(h.id, h.id === me.char ? 'hop' : '')}${esc(h.name)}</button>`).join('');
+// ---------- hero, hat and name ----------
+function drawPicks() {
+  $('#heroes').innerHTML = HEROES.map((h) => `<button class="hero${h.id === me.char ? ' on' : ''}${h.ours ? ' ours' : ''}" data-id="${h.id}"><img class="px-img${h.id === me.char ? ' hop' : ''}" src="${spriteURL(h.id, { hat: me.hat })}" alt="">${esc(h.name)}</button>`).join('');
+  $('#hats').innerHTML = HATS.map((t) => `<button class="hatb${t.id === me.hat ? ' on' : ''}" data-id="${t.id}" title="${esc(t.name)}"><img class="px-img" src="${hatURL(t.id)}" alt="${esc(t.name)}"></button>`).join('');
+  drawFlyer('pick');
 }
-$('#heroes').addEventListener('click', (e) => { const b = e.target.closest('.hero'); if (!b) return; unlock(); sfx.pick(); me.char = b.dataset.id; drawHeroes(); });
+$('#heroes').addEventListener('click', (e) => { const b = e.target.closest('.hero'); if (!b) return; unlock(); sfx.pick(); me.char = b.dataset.id; drawPicks(); bounce(); });
+$('#hats').addEventListener('click', (e) => { const b = e.target.closest('.hatb'); if (!b) return; unlock(); sfx.pop(); me.hat = b.dataset.id; drawPicks(); bounce(); });
+function bounce() { const f = $('.flyer.pick'); f.classList.remove('boing'); void f.offsetWidth; f.classList.add('boing'); }
 function openMe(edit) {
   editing = edit;
   $('#nameIn').value = me.name; $('#meErr').textContent = '';
   $('#meGo').textContent = edit ? 'SAVE ▶' : 'JOIN GAME ▶';
   $('#meCode').textContent = 'GAME ' + code.slice(0, 3) + ' ' + code.slice(3);
-  drawHeroes(); show('me');
-  if (!me.name) setTimeout(() => $('#nameIn').focus(), 50);
+  drawPicks(); show('me');
 }
 $('#nameIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#nameIn').blur(); });
 $('#meGo').onclick = async () => {
@@ -120,7 +135,7 @@ $('#meGo').onclick = async () => {
   const n = $('#nameIn').value.replace(/\s+/g, ' ').trim();
   if (!n) { $('#meErr').textContent = 'Type your name first.'; $('#nameIn').focus(); return; }
   me.name = n.slice(0, 14); save(); sfx.tap();
-  if (editing && game) { game.send({ type: 'look', name: me.name, char: me.char }); drawWait(); show('wait'); return; }
+  if (editing && game) { game.send({ type: 'look', name: me.name, char: me.char, hat: me.hat }); drawWait(); show('wait'); return; }
   connect();
 };
 $('#changeHero').onclick = () => { sfx.tap(); openMe(true); };
@@ -162,16 +177,18 @@ $('#newCode').onclick = () => { codeIn.value = ''; drawDigits(); $('#joinErr').t
 // ---------- the rounds ----------
 const buzz = (p) => { try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate(p); } catch (e) { /* no buzz */ } };
 function drawWait(m) {
-  $('#waitHero').src = spriteURL(me.char); $('#waitName').textContent = me.name;
+  if (m && m.me) streak = m.me.streak || 0;
+  drawFlyer('waiting'); $('#waitName').textContent = me.name;
   if (m) $('#waitTop').textContent = m.topic ? 'YOU\'RE IN! · ' + m.topic.toUpperCase() : 'YOU\'RE IN!';
 }
 function onWait(m) { clearInterval(tbarT); drawWait(m); show('wait'); }
 function onQ(m) {
   cur = m; picked = m.got ?? null;
+  if (m.me) streak = m.me.streak || 0;
   $('#pNum').textContent = `${m.n}/${m.total}`;
-  $('#pScore').textContent = m.me ? m.me.score : 0;
+  $('#pScore').textContent = (m.me ? m.me.alt || 0 : 0) + ' m';
   $('#pclueText').textContent = m.desc;
-  $('#pans').innerHTML = m.opts.map((o, k) => `<button class="pbtn px opt-${LETTERS[k]}" data-k="${k}"><span class="shape"></span><span>${esc(o)}</span></button>`).join('');
+  $('#pans').innerHTML = m.opts.map((o, k) => `<button class="pbtn px opt-${LETTERS[k]} pop" style="animation-delay:${k * .08}s" data-k="${k}"><span class="shape"></span><span>${esc(o)}</span></button>`).join('');
   $('#locked').hidden = picked == null;
   markPicked();
   show('q'); window.scrollTo(0, 0); $('#q').scrollTop = 0;
@@ -194,16 +211,19 @@ $('#pans').addEventListener('click', (e) => {
 function onGot(m) { picked = m.choice; markPicked(); $('#locked').hidden = false; }
 function onRes(m) {
   clearInterval(tbarT);
+  streak = m.streak || 0;
   const v = $('#verdict');
   v.textContent = m.ok ? 'RIGHT!' : m.none ? 'TIME\'S UP!' : 'OOPS!';
   v.className = 'verdict pop ' + (m.ok ? 'ok' : 'no');
-  $('#resHero').src = spriteURL(me.char); $('#resHero').className = 'px-img big-hero' + (m.ok ? ' hop' : ' shake');
+  drawFlyer('result');
+  const f = $('.flyer.result'); f.className = 'flyer result ' + (m.ok ? 'up' : 'wobble');
   $('#resWord').textContent = m.word;
-  $('#resPts').textContent = m.ok ? `+${m.pts}${m.streak >= 3 ? ' · STREAK ' + m.streak : ''}` : '+0';
+  $('#resPts').textContent = m.ok ? `+${m.gain} m` : 'NO CLIMB THIS TIME';
   $('#resPts').style.color = m.ok ? '' : '#c02a3a';
-  $('#resScore').textContent = m.score;
+  $('#resBonus').textContent = m.ok && m.bonus ? `+${m.bonus} m STREAK BONUS · ${m.streak} IN A ROW!` : m.ok && m.streak === 1 ? 'GET THE NEXT ONE FOR A STREAK BONUS!' : '';
+  $('#resScore').textContent = m.alt + ' m';
   $('#resPlace').textContent = `${ordinal(m.place)}/${m.of}`;
-  $('#resHint').textContent = m.last ? 'That was the last question! Look at the big screen.' : 'Get ready for the next clue.';
+  $('#resHint').textContent = m.last ? 'That was the last clue! Look at the big screen.' : (m.zone ? `You are flying over the ${m.zone}. Watch the big screen!` : 'Watch the big screen!');
   show('res');
   if (m.ok) sfx.right(); else sfx.wrong();
   buzz(m.ok ? [40, 60, 40] : 200);
@@ -212,9 +232,9 @@ function onEnd(m) {
   clearInterval(tbarT);
   $('#endTitle').textContent = m.place === 1 ? 'YOU WON!' : m.place <= 3 ? 'TOP 3!' : 'GAME OVER';
   $('#endTitle').className = 'verdict pop' + (m.place <= 3 ? ' ok' : '');
-  $('#endHero').src = spriteURL(me.char);
+  drawFlyer('final');
   $('#endPlace').textContent = `${ordinal(m.place)}/${m.of}`;
-  $('#endScore').textContent = m.score;
+  $('#endScore').textContent = m.score + ' m';
   show('end');
   if (m.place <= 3) sfx.right();
 }

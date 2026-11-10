@@ -1,146 +1,136 @@
-// Clue Quest: the 10 pixel heroes. Each is a 16×16 map: one letter per pixel, '.' is see-through, 'k' the dark outline.
-// spriteURL(id) draws a hero on a canvas once and returns a PNG data URL; show it in an <img class="px-img">
-// (image-rendering: pixelated) at any size that is a multiple of 16.
+// Clue Quest pixel heroes: our six Foxino characters and six winter animals, each a 16×16 map (one letter per
+// pixel, '.' see-through, 'k' the dark outline), drawn on a 16×22 canvas so a hat fits on top. `hat: [x, y]` is
+// where a hat sits: the head's top row and its middle column. Fixed traits follow the vault's Character Creation
+// Rules (Foxino: purple-and-orange fox, green eyes, yellow T-shirt, orange shorts; Stella: orange fox, purple streak,
+// side braid, teal eyes, blue overalls with a yellow star; Pix: green elf, eyes ALWAYS under her lime bangs, purple
+// cap with an orange brim; Charlie: lavender ghost, purple hair, sleepy eyes, black hoodie with a skull, headphones
+// with an orange X; Rob: cyan robot, black screen face, heart antenna, orange battery window; Gummy: pink-and-blue
+// gummy alien, curly antennae, big purple eyes, buck teeth).
 
 const K = '#1d1430';
 export const HEROES = [
-  { id: 'fox', name: 'Rusty', pal: { o: '#f07a2a', O: '#b84a14', p: '#ff9cb0', w: '#fff3e0', e: K }, map: [
-    '................',
+  // ---- our characters ----
+  { id: 'foxino', name: 'Foxino', ours: true, hat: [7, 3], pal: { p: '#8a4ad0', P: '#5e2e9a', o: '#f2802a', w: '#fff4e4', g: '#4ad06a', y: '#ffd23a', e: K }, map: [
+    '.kk..........kk.',
+    '.kpk........kok.',
+    '.kPpk......kook.',
+    '.kpppkkkkkkoook.',
+    '.kppppppoooooook',
+    '.kpppppoooooook.',
+    '.kppwgppoowgook.',
+    '.kppggppooggook.',
+    '.kpwwwwwwwwwwok.',
+    '.kowwwwkkwwwwok.',
+    '..kwwwkwwkwwwk..',
+    '...kkyyyyyykk...',
+    '..kpyyyyyyyypk..',
+    '..kpkyyyyyykpk..',
+    '...koookkoook...',
+    '...kppk..kppk...'] },
+  { id: 'stella', name: 'Stella', ours: true, hat: [7, 3], pal: { o: '#f2802a', O: '#c45a1a', p: '#9a4ae0', c: '#ffd8b0', w: '#fff4e4', t: '#2ac8c0', b: '#3a6ad8', y: '#ffd23a', e: K }, map: [
     '.kk..........kk.',
     '.kok........kok.',
-    '.kopk......kpok.',
-    '.koookkkkkkoook.',
-    '.kooooooooooook.',
-    '.kooeeooooeeook.',
-    '.kooeeooooeeook.',
-    '.kpowwwwwwwwopk.',
+    '.kock......kcok.',
+    '.koockkkkkkcook.',
+    '.koooppoooooook.',
+    '.kooppoooooooko.',
+    '.koowtoooowtook.',
+    '.koottoooottook.',
+    '.kowwwwwwwwwwok.',
     '.kowwwwkkwwwwok.',
-    '.kkwwwwwwwwwwkk.',
-    '..kkoowwwwookk..',
-    '..koowwwwwwook..',
-    '..koowwwwwwookk.',
-    '..kOOkkkkkkOOkOk',
-    '..kkkk....kkkkk.'] },
-  { id: 'cat', name: 'Miso', pal: { g: '#a4aac4', G: '#6a7094', p: '#ff9cb0', w: '#f4f4fa', e: K }, map: [
-    '................',
-    '.k............k.',
-    '.kk..........kk.',
-    '.kpk........kpk.',
-    '.kgpkkkkkkkkpgk.',
-    '.kggggGgGgggggk.',
-    '.kggggggggggggk.',
-    '.kggeeggggeeggk.',
-    '.kggeeggggeeggk.',
-    '.kpgggwkkwgggpk.',
-    '.kggggwwwwggggk.',
-    '..kkggggggggkk..',
-    '...kgwwwwwwgk...',
-    '...kgwwwwwwgk.k.',
-    '...kggkkkkggkGk.',
-    '...kkk....kkkk..'] },
-  { id: 'frog', name: 'Hopper', pal: { g: '#5cc85a', G: '#2e8a3e', w: '#ffffff', e: K, r: '#e0505a', y: '#d8f08a' }, map: [
-    '................',
-    '..kkkk....kkkk..',
-    '.kwwwwk..kwwwwk.',
-    '.kweewkkkkweewk.',
-    '.kgwwggggggwwgk.',
-    '.kggggggggggggk.',
-    '.kgGggggggggGgk.',
-    '.kggkrrrrrrkggk.',
-    '.kgggkkkkkkgggk.',
-    '..kggggggggggk..',
-    '..kgyyyyyyyygk..',
-    '.kggyyyyyyyyggk.',
-    '.kgkyyyyyyyykgk.',
-    '..kkyyyyyyyykk..',
-    '.kggkkkkkkkkggk.',
-    '.kkkk......kkkk.'] },
-  { id: 'robot', name: 'Bolt', pal: { s: '#c8d0e0', S: '#7e88a6', b: '#2a3a7a', c: '#6ff0ff', r: '#ff4a5a' }, map: [
-    '.......rr.......',
-    '.......kk.......',
-    '...kkkkkkkkkk...',
-    '..kssssssssssk..',
-    '..ksbbbbbbbbsk..',
-    '.kksbccbbccbskk.',
-    '.kSsbccbbccbsSk.',
-    '.kksbbbbbbbbskk.',
-    '..ksbbccccbbsk..',
-    '..kssssssssssk..',
-    '...kkkkkkkkkk...',
-    '....kSSSSSSk....',
-    '..kksssrsssskk..',
-    '..kSssssssssSk..',
-    '...kkSSkkSSkk...',
-    '...kkkk..kkkk...'] },
-  { id: 'knight', name: 'Sir Pip', pal: { m: '#c4cee0', M: '#7a86a0', r: '#e04848', w: '#ffe46a', t: '#3a6ad8', y: '#ffd24a' }, map: [
-    '......rrrr......',
-    '.......rr.......',
+    '.kokwwkwwkwwk...',
+    '.kokkwbwwbwkk...',
+    '.kokbbbybbbbk...',
+    '.kpkbbyyybbbk...',
+    '..k.kbbbkbbbk...',
+    '....kook.kook...'] },
+  { id: 'pix', name: 'Pix', ours: true, hat: [7, 0], pal: { u: '#7a3ad0', o: '#ff8a2a', l: '#a8f04a', L: '#7ac832', g: '#5cc85a', w: '#ffffff', s: '#8a90a8', S: '#5e6478', r: '#d8505a', e: K }, map: [
     '....kkkkkkkk....',
-    '...kmmmmmmmmk...',
-    '..kmmmmmmmmmmk..',
-    '..kmMmmmmmmMmk..',
-    '..kmkkkkkkkkmk..',
-    '..kmkwkkkkwkmk..',
-    '..kmmmmmmmmmmk..',
-    '...kmmmmmmmmk...',
-    '....kkkkkkkk....',
-    '..kktttyytttkk..',
-    '.kmktyyyyyytkmk.',
-    '.kkktttyytttkkk.',
-    '...kMMk..kMMk...',
-    '...kkkk..kkkk...'] },
-  { id: 'wizard', name: 'Zara', pal: { h: '#7a4ad8', H: '#4a2a9a', y: '#ffd24a', f: '#ffd0a8', w: '#f0f0f8', e: K }, map: [
-    '.........kk.....',
-    '........khk.....',
-    '.......khhk.....',
-    '......khyhhk....',
-    '.....khhhhhk....',
-    '....khhhyhhhk...',
-    '..kkkkkkkkkkkkk.',
-    '..kHHHHHHHHHHHk.',
-    '...kffffffffk...',
-    '...kfeffffefk...',
-    '...kfwwwwwwfk...',
-    '..khkwwwwwwkhk..',
-    '.khhhkwwwwkhhhk.',
-    '.khhhhkwwkhhhhk.',
-    '..khhhhhhhhhhk..',
-    '..kkkkkkkkkkkk..'] },
-  { id: 'ghost', name: 'Boo', pal: { w: '#f4f4ff', W: '#c4c4e6', e: K, p: '#ffa8c8' }, map: [
-    '................',
+    '...kuuuuuuuuk...',
+    '..kuuuuuuuuuuk..',
+    '.kooooooooooook.',
+    'kgklllLlllLlllkg',
+    '.kglllLlllLlllk.',
+    '..kllllllllllk..',
+    '..klLggggggLlk..',
+    '..klgggkkgggLk..',
+    '...klgggggglk...',
+    '...kuwwwwwwuk...',
+    '..kuuuwwwwuuuk..',
+    '..kgkooooookgk..',
+    '...kssssssssk...',
+    '...ksSsk.ksSsk..',
+    '...kuuk...kuuk..'] },
+  { id: 'charlie', name: 'Charlie', ours: true, hat: [7, 1], pal: { m: '#8a5ad8', M: '#6a3ab0', l: '#d8c8f4', L: '#b8a4e0', b: '#1e1a28', w: '#ffffff', x: '#ff8a2a', e: K }, map: [
+    '....k.kk.k......',
+    '...kmkmmkmkk....',
+    '..kmmMmmmmMmmk..',
+    '.kmmmmmmmmmmmmk.',
+    'kkkmMmmmmmmMmkkk',
+    'kxklllllllllllxk',
+    'kkklMMllllMMlkkk',
+    '..klwkllllwklk..',
+    '..kllllkkklllk..',
+    '...kkkkkkkkkk...',
+    '..kbbbbbbbbbbk..',
+    '.kbbbbwwwbbbbbk.',
+    '.klbbbwkwbbbblk.',
+    '..kbbbbwbbbbbk..',
+    '...kLlllllllk...',
+    '.....kLlllk.....'] },
+  { id: 'rob', name: 'Rob', ours: true, hat: [7, 2], pal: { r: '#ff4a6a', c: '#4ad8f0', C: '#2aa0c8', t: '#7af8ff', o: '#ff8a2a', y: '#ffe04a', e: K }, map: [
+    '.......rr.......',
+    '........k.......',
     '.....kkkkkk.....',
-    '...kkwwwwwwkk...',
-    '..kwwwwwwwwwwk..',
-    '.kwwwwwwwwwwwwk.',
-    '.kwwweewweewwwk.',
-    '.kwwweewweewwwk.',
-    '.kwpwwwwwwwwpwk.',
-    '.kwwwwwkkwwwwwk.',
-    '.kwwwwwkkwwwwwk.',
-    '.kwwwwwwwwwwwwk.',
-    '.kWwwwwwwwwwwWk.',
-    '.kWWwwwwwwwwWWk.',
-    '.kWWWwWWWWwWWWk.',
-    '.kWWkkWWWWkkWWk.',
-    '.kkk..kkkk..kkk.'] },
-  { id: 'dino', name: 'Rexi', pal: { t: '#3ac8a8', T: '#1e8a78', b: '#f8e8a8', w: '#ffffff', e: K, o: '#ff8a3a' }, map: [
+    '...kkcccccckk...',
+    '..kcccccccccck..',
+    '.kcckkkkkkkkcck.',
+    '.kcckttkkttkcck.',
+    '.kcckkkkkkkkcck.',
+    '..kcckkttkkcck..',
+    '...kcccccccck...',
+    '..kCcckkkkccCk..',
+    '.kcckkoyokkcck..',
+    '.kcckkooykkcck..',
+    '..kCcckkkkcCk...',
+    '...kcck..kcck...',
+    '...kkkk..kkkk...'] },
+  { id: 'gummy', name: 'Gummy', ours: true, hat: [7, 3], pal: { p: '#ff6ac0', P: '#d8409a', b: '#5ab8ff', w: '#ffffff', v: '#8a3ad8', e: K }, map: [
+    '..kpk......kpk..',
+    '...kpk....kpk...',
+    '....kbk..kbk....',
+    '.....kppppk.....',
+    '....kppppppk....',
+    '...kpwwppwwpk...',
+    '...kpwvppwvpk...',
+    '...kppppppppk...',
+    '...kpkkkkkkpk...',
+    '...kppkwwkppk...',
+    '....kppbbppk....',
+    '...kpkbbppkpk...',
+    '.....kpbbpk.....',
+    '.....kbpkbk.....',
+    '.....kpkkpk.....',
+    '....kppk.kbbk...'] },
+  // ---- winter animals ----
+  { id: 'bear', name: 'Polar Bear', hat: [7, 3], pal: { w: '#f4f6ff', W: '#c8d0ea', g: '#a8b0cc', e: K }, map: [
     '................',
-    '......kkkkkkk...',
-    '.....ktttttttk..',
-    '....kttwetttttk.',
-    '....kttwetttttk.',
-    '...kotttttttttk.',
-    '...kttttttkkkkk.',
-    '..kotttttkwkwk..',
-    '..kttttttkkkkk..',
-    '.kotttttbbk.....',
-    '.kttttttbbbk....',
-    'kottttttbbbkk...',
-    'ktttttttbbbtk...',
-    '.kttttttbbbtk...',
-    '..kttkkkttk.....',
-    '..kkkk.kkkk.....'] },
-  { id: 'penguin', name: 'Waddle', pal: { n: '#2a3460', w: '#ffffff', e: K, y: '#ffa030' }, map: [
+    '..kkk......kkk..',
+    '.kwwwk....kwwwk.',
+    '.kwgwkkkkkkwgwk.',
+    '.kwwwwwwwwwwwwk.',
+    '.kwwwwwwwwwwwwk.',
+    '.kwwkkwwwwkkwwk.',
+    '.kwwwwwwwwwwwwk.',
+    '.kwwwwgkkgwwwwk.',
+    '.kWwwwwkkwwwwWk.',
+    '..kkwwwwwwwwkk..',
+    '.kwwwwwwwwwwwwk.',
+    'kwwkWwwwwwwWkwwk',
+    '.kkkwwwwwwwwkkk.',
+    '...kwwwkkwwwk...',
+    '...kggk..kggk...'] },
+  { id: 'penguin', name: 'Penguin', hat: [7, 1], pal: { n: '#2a3460', w: '#ffffff', e: K, y: '#ffa030' }, map: [
     '................',
     '.....kkkkkk.....',
     '...kknnnnnnkk...',
@@ -157,41 +147,196 @@ export const HEROES = [
     '..knnwwwwwwnnk..',
     '...kyyykkyyyk...',
     '...kkkk..kkkk...'] },
-  { id: 'astro', name: 'Nova', pal: { w: '#f0f4ff', W: '#aab4d0', v: '#2a3a8a', V: '#8ac0ff', o: '#ff8a3a' }, map: [
+  { id: 'reindeer', name: 'Reindeer', hat: [7, 2], pal: { a: '#e8c890', d: '#9a5e34', D: '#7a4424', c: '#e8cca4', r: '#e8404a', e: K }, map: [
+    '.a.a........a.a.',
+    '.aaa........aaa.',
+    '..a.kkkkkkkk.a..',
+    '..akddddddddka..',
+    '.kdkddddddddkdk.',
+    '..kddddddddddk..',
+    '..kdkkddddkkdk..',
+    '..kddddddddddk..',
+    '..kdccccccccdk..',
+    '...kccckkccck...',
+    '....kcccccck....',
+    '...kddddddddk...',
+    '..kdkddccddkdk..',
+    '...kDddddddDk...',
+    '...kdkk..kkdk...',
+    '...kkk....kkk...'] },
+  { id: 'owl', name: 'Snowy Owl', hat: [7, 3], pal: { w: '#ffffff', W: '#d8dcec', y: '#ffd23a', o: '#ff9a3a', e: K }, map: [
     '................',
-    '.....kkkkkk.....',
+    '..k..........k..',
+    '..kwk......kwk..',
+    '..kwwkkkkkkwwk..',
+    '.kwwwwwwwwwwwwk.',
+    '.kwkkkwwwwkkkwk.',
+    '.kkyykwwwwkyykk.',
+    '.kwkkkwwwwkkkwk.',
+    '.kwwwwwoowwwwwk.',
+    '.kwwkwwoowwkwwk.',
+    'kwwwwwwwwwwwwwwk',
+    'kWkwwwwkwwwwkwWk',
+    'kWwwwkwwwwkwwwWk',
+    '.kwwwwwwwwwwwwk.',
+    '..kkwwwwwwwwkk..',
+    '....kyyk.kyyk...'] },
+  { id: 'hare', name: 'Snow Hare', hat: [7, 4], pal: { w: '#ffffff', W: '#d8dcec', p: '#ffa8c0', b: '#4a8aff', e: K }, map: [
+    '...kk......kk...',
+    '..kwpk....kpwk..',
+    '..kwpk....kpwk..',
+    '..kwpk....kpwk..',
+    '...kwkkkkkkwk...',
+    '..kwwwwwwwwwwk..',
+    '.kwwbbwwwwbbwwk.',
+    '.kwwbkwwwwbkwwk.',
+    '.kpwwwwppwwwwpk.',
+    '..kwwwkwwkwwwk..',
     '...kkwwwwwwkk...',
     '..kwwwwwwwwwwk..',
-    '.kwwkkkkkkkkwwk.',
-    '.kwkvVVvvvvvkwk.',
-    '.kwkvVvvvvvvkwk.',
-    '.kwkvvvvvvvvkwk.',
-    '.kwwkkkkkkkkwwk.',
-    '..kwwwwwwwwwwk..',
-    '...kkwwwwwwkk...',
-    '..kwkwwoowwkwk..',
-    '.kwkwwwWWwwwkwk.',
-    '.kkkwwwwwwwwkkk.',
-    '...kwWWkkWWwk...',
-    '...kkkkk.kkkkk..'] },
+    '.kwkwwwwwwwwkwk.',
+    '..kWwwwwwwwwWk..',
+    '...kwwk..kwwk...',
+    '...kkkk..kkkkww.'] },
+  { id: 'husky', name: 'Husky', hat: [7, 3], pal: { g: '#7a849c', G: '#5a6278', w: '#ffffff', b: '#4ab8ff', r: '#ff6a7a', e: K }, map: [
+    '.kk..........kk.',
+    '.kgk........kgk.',
+    '.kgwk......kwgk.',
+    '.kggkkkkkkkkggk.',
+    '.kgggggwwgggggk.',
+    '.kggggwwwwggggk.',
+    '.kgwbbwwwwbbwgk.',
+    '.kgwwwwwwwwwwgk.',
+    '.kgwwwwkkwwwwgk.',
+    '..kwwwkrrkwwwk..',
+    '...kkgggggkkk...',
+    '..kggwwwwwwggk..',
+    '.kgkgwwwwwwgkgk.',
+    '..kGgwwwwwwgGk..',
+    '...kggkkkkggk...',
+    '...kwwk..kwwk...'] },
 ];
 export const heroById = (id) => HEROES.find((h) => h.id === id) || HEROES[0];
 
+// ---- hats: drawn on top of the head, centred on the hero's hat point (bottom row sits on the head's top row) ----
+export const HATS = [
+  { id: 'none', name: 'No hat', map: [] },
+  { id: 'santa', name: 'Santa hat', pal: { r: '#e83a4a', R: '#b02232', w: '#ffffff' }, map: [
+    '........ww.',
+    '......kkww.',
+    '....kkrrk..',
+    '...krrrRk..',
+    '..krrrrrRk.',
+    '.kwwwwwwwwk'] },
+  { id: 'beanie', name: 'Bobble hat', pal: { t: '#2ac8a8', T: '#1a9a80', w: '#ffffff' }, map: [
+    '....www....',
+    '....kwk....',
+    '..kktttkk..',
+    '.kttTtTttk.',
+    '.kTtTtTtTk.',
+    '.kwwwwwwwk.'] },
+  { id: 'crown', name: 'Crown', pal: { y: '#ffd23a', Y: '#e0a020', r: '#ff4a6a', b: '#4a8aff' }, map: [
+    '.k..k..k.',
+    'kyk.kyk.ky',
+    'kyykyyykyk',
+    'kyryybyyrk',
+    'kYYYYYYYYk'] },
+  { id: 'tophat', name: 'Top hat', pal: { b: '#2a2440', B: '#423a60', r: '#e83a4a' }, map: [
+    '..kkkkkk..',
+    '..kbBbbk..',
+    '..kbBbbk..',
+    '..krrrrk..',
+    'kkbbbbbbkk'] },
+  { id: 'elf', name: 'Elf hat', pal: { g: '#3ac85a', G: '#2a9a44', y: '#ffd23a', r: '#e83a4a' }, map: [
+    'yy.........',
+    'ykk........',
+    '..kgkk.....',
+    '...kggkk...',
+    '...kgggGk..',
+    '..rrrrrrrr.'] },
+  { id: 'antlers', name: 'Antlers', pal: { a: '#c88a4a', A: '#9a6230', r: '#e83a4a' }, map: [
+    'a.a......a.a',
+    'aaa......aaa',
+    '.a........a.',
+    '.aA......Aa.',
+    '..AAAAAAAA..'] },
+  { id: 'earmuffs', name: 'Earmuffs', pal: { p: '#ff8ad8', P: '#d860b0', g: '#8a90a8' }, map: [
+    '...kkkkkkkkkk...',
+    '..kg........gk..',
+    '.kg..........gk.',
+    'kppk........kppk',
+    'kPpk........kpPk'], low: 3 },
+];
+export const hatById = (id) => HATS.find((h) => h.id === id) || HATS[0];
+
 const cache = new Map();
-// flip: mirror it (for walking the other way); scale: canvas pixels per sprite pixel
-export function spriteURL(id, { flip = false, scale = 4 } = {}) {
-  const key = id + flip + scale;
-  if (cache.has(key)) return cache.get(key);
-  const h = heroById(id), c = document.createElement('canvas');
-  c.width = c.height = 16 * scale;
-  const g = c.getContext('2d');
-  h.map.forEach((row, y) => [...row].forEach((ch, x) => {
+function paint(g, map, pal, ox, oy, s) {
+  map.forEach((row, y) => [...row].forEach((ch, x) => {
     if (ch === '.') return;
-    g.fillStyle = ch === 'k' ? K : (h.pal[ch] || '#f0f');
-    g.fillRect((flip ? 15 - x : x) * scale, y * scale, scale, scale);
+    g.fillStyle = ch === 'k' ? K : (pal[ch] || '#f0f');
+    g.fillRect((ox + x) * s, (oy + y) * s, s, s);
   }));
-  const url = c.toDataURL();
-  cache.set(key, url);
-  return url;
 }
-export const heroImg = (id, cls = '') => `<img class="px-img ${cls}" src="${spriteURL(id)}" alt="">`;
+// hero + hat on a 16×22 canvas (6 empty rows on top for the hat)
+export function spriteURL(id, { hat = 'none', scale = 4 } = {}) {
+  const key = id + '|' + hat + '|' + scale;
+  if (cache.has(key)) return cache.get(key);
+  const h = heroById(id), t = hatById(hat), c = document.createElement('canvas');
+  c.width = 16 * scale; c.height = 22 * scale;
+  const g = c.getContext('2d');
+  paint(g, h.map, h.pal, 0, 6, scale);
+  if (t.map.length) {
+    const w = Math.max(...t.map.map((r) => r.length)), [hx, hy] = h.hat;
+    const ox = Math.round(hx + .5 - w / 2), oy = 6 + hy - t.map.length + 1 + (t.low || 0);
+    paint(g, t.map, t.pal, ox, oy, scale);
+  }
+  const url = c.toDataURL(); cache.set(key, url); return url;
+}
+// just the hat, for the picker
+export function hatURL(id, scale = 4) {
+  const key = 'hat|' + id + '|' + scale;
+  if (cache.has(key)) return cache.get(key);
+  const t = hatById(id), c = document.createElement('canvas');
+  const w = Math.max(1, ...t.map.map((r) => r.length)), hgt = Math.max(1, t.map.length);
+  // cropped to the hat (a square, so every button lines up)
+  const side = t.map.length ? Math.max(w, hgt) + 2 : 12; c.width = c.height = side * scale;
+  const g = c.getContext('2d');
+  if (t.map.length) paint(g, t.map, t.pal, Math.round((side - w) / 2), Math.round((side - hgt) / 2), scale);
+  else { const m = side / 2; g.strokeStyle = '#b8b4c8'; g.lineWidth = scale * 1.2; g.beginPath(); g.arc(m * scale, m * scale, (m - 2) * scale, 0, 7); g.moveTo((m - 2.8) * scale, (m + 2.8) * scale); g.lineTo((m + 2.8) * scale, (m - 2.8) * scale); g.stroke(); }
+  const url = c.toDataURL(); cache.set(key, url); return url;
+}
+
+// ---- a bunch of balloons on strings (n balloons, gold = a golden streak balloon). 24×24 pixels; strings meet at the
+// bottom middle, where the hero's hands are ----
+const BALLOON = ['..kkk..', '.kcwck.', 'kcwcccK', 'kcccccK', 'kcccccK', '.kcccK.', '..kKk..', '...k...'];
+const COLORS = ['#ff4a5a', '#4a8aff', '#3ac85a', '#ff8ad8', '#a86aff', '#ffa030'];
+const SPOTS = [[8, 1], [2, 4], [14, 4], [5, 0], [11, 0], [8, 6]];
+export function balloonsURL(n = 3, gold = false, seed = 0, scale = 4) {
+  n = Math.max(1, Math.min(6, n));
+  const key = 'b|' + n + '|' + gold + '|' + (seed % 6) + '|' + scale;
+  if (cache.has(key)) return cache.get(key);
+  const c = document.createElement('canvas'); c.width = 24 * scale; c.height = 24 * scale;
+  const g = c.getContext('2d'), s = scale;
+  const spots = SPOTS.slice(0, n);
+  // strings first
+  g.fillStyle = '#e8eaf6';
+  for (const [x, y] of spots) {
+    const x0 = x + 3, y0 = y + 8, x1 = 11.5, y1 = 23;
+    for (let k = 0; k <= 1; k += 1 / 24) g.fillRect(Math.round(x0 + (x1 - x0) * k) * s, Math.round(y0 + (y1 - y0) * k) * s, s, s);
+  }
+  spots.forEach(([x, y], i) => {
+    const isGold = gold && i === 0, col = isGold ? '#ffd23a' : COLORS[(i + seed) % COLORS.length];
+    BALLOON.forEach((row, yy) => [...row].forEach((ch, xx) => {
+      if (ch === '.') return;
+      g.fillStyle = ch === 'k' ? K : ch === 'w' ? '#ffffff' : ch === 'K' ? shade(col) : col;
+      g.fillRect((x + xx) * s, (y + yy) * s, s, s);
+    }));
+    if (isGold) { g.fillStyle = '#fff8c0'; g.fillRect((x + 2) * s, (y + 2) * s, s, s); g.fillRect((x + 4) * s, (y + 4) * s, s, s); }
+  });
+  const url = c.toDataURL(); cache.set(key, url); return url;
+}
+function shade(hex) {
+  const n = parseInt(hex.slice(1), 16), f = (v) => Math.round(v * .68);
+  return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((v) => f(v).toString(16).padStart(2, '0')).join('');
+}
+export const heroImg = (id, hat, cls = '') => `<img class="px-img ${cls}" src="${spriteURL(id, { hat })}" alt="">`;

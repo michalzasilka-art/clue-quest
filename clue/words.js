@@ -2,7 +2,7 @@
 // The description never uses the word. The two wrong answers come from the same topic, so the clue has to be read.
 
 export const SETS = [
-  { id: 'animals', title: 'Animals', level: 'A1', icon: 'fox', words: [
+  { id: 'animals', title: 'Animals', level: 'A1', icon: 'reindeer', hat: 'none', words: [
     ['dog', 'A pet that barks. It likes to play with a ball and go for walks.', 'cat', 'rabbit'],
     ['cat', 'A small pet with soft fur. It says "meow" and likes to sleep a lot.', 'dog', 'mouse'],
     ['horse', 'A big, strong animal. People can ride on its back.', 'cow', 'donkey'],
@@ -22,7 +22,7 @@ export const SETS = [
     ['camel', 'An animal that lives in the desert. It has one or two humps on its back.', 'giraffe', 'horse'],
     ['parrot', 'A colourful bird. It can learn to say words.', 'owl', 'penguin'],
   ] },
-  { id: 'food', title: 'Food and drink', level: 'A1', icon: 'frog', words: [
+  { id: 'food', title: 'Food and drink', level: 'A1', icon: 'gummy', hat: 'santa', words: [
     ['bread', 'We buy it at a bakery. We make sandwiches with it.', 'cheese', 'cake'],
     ['cheese', 'A yellow or white food made from milk. Mice love it in cartoons.', 'butter', 'bread'],
     ['apple', 'A round fruit. It can be red or green.', 'pear', 'orange'],
@@ -42,7 +42,7 @@ export const SETS = [
     ['strawberry', 'A small red fruit with little seeds on the outside.', 'cherry', 'tomato'],
     ['salt', 'It is white and we put it on chips. It is not sweet!', 'sugar', 'pepper'],
   ] },
-  { id: 'school', title: 'At school', level: 'A1', icon: 'wizard', words: [
+  { id: 'school', title: 'At school', level: 'A1', icon: 'pix', hat: 'none', words: [
     ['teacher', 'This person helps you learn in the classroom.', 'student', 'doctor'],
     ['pencil', 'You write and draw with it. You can rub out what you write.', 'pen', 'crayon'],
     ['rubber', 'A small thing you use to take away pencil mistakes.', 'ruler', 'pencil case'],
@@ -62,7 +62,7 @@ export const SETS = [
     ['pencil case', 'A small bag or box for your pens and pencils.', 'schoolbag', 'lunch box'],
     ['map', 'A picture of a country or city. It shows where places are.', 'photo', 'poster'],
   ] },
-  { id: 'home', title: 'At home', level: 'A1', icon: 'cat', words: [
+  { id: 'home', title: 'At home', level: 'A1', icon: 'stella', hat: 'beanie', words: [
     ['kitchen', 'The room where we cook food.', 'bathroom', 'dining room'],
     ['bathroom', 'The room where you have a shower and clean your teeth.', 'kitchen', 'bedroom'],
     ['bedroom', 'The room where you sleep.', 'living room', 'bathroom'],
@@ -82,7 +82,7 @@ export const SETS = [
     ['washing machine', 'It washes your dirty clothes.', 'dishwasher', 'fridge'],
     ['roof', 'The top part of a house. It keeps the rain out.', 'wall', 'floor'],
   ] },
-  { id: 'jobs', title: 'Jobs', level: 'A2', icon: 'knight', words: [
+  { id: 'jobs', title: 'Jobs', level: 'A2', icon: 'rob', hat: 'tophat', words: [
     ['doctor', 'This person helps you when you are ill.', 'nurse', 'dentist'],
     ['farmer', 'This person grows food and looks after cows and sheep.', 'gardener', 'vet'],
     ['firefighter', 'This person is brave and puts out fires.', 'police officer', 'pilot'],
@@ -102,7 +102,7 @@ export const SETS = [
     ['astronaut', 'This person travels into space in a rocket.', 'pilot', 'scientist'],
     ['baker', 'This person gets up early to make bread and cakes.', 'chef', 'farmer'],
   ] },
-  { id: 'nature', title: 'Weather and nature', level: 'A2', icon: 'astro', words: [
+  { id: 'nature', title: 'Weather and nature', level: 'A2', icon: 'owl', hat: 'earmuffs', words: [
     ['sun', 'It is hot and bright and in the sky in the day.', 'moon', 'star'],
     ['rain', 'Water that falls from the clouds. You need an umbrella.', 'snow', 'wind'],
     ['snow', 'Cold and white, it falls from the sky in winter. Children love to play in it.', 'ice', 'rain'],
@@ -122,7 +122,7 @@ export const SETS = [
     ['volcano', 'A mountain with fire and hot rock inside it.', 'mountain', 'cave'],
     ['moon', 'You can see it in the sky at night. It goes round the Earth.', 'sun', 'star'],
   ] },
-  { id: 'sports', title: 'Sports and hobbies', level: 'A2', icon: 'robot', words: [
+  { id: 'sports', title: 'Sports and hobbies', level: 'A2', icon: 'foxino', hat: 'beanie', words: [
     ['football', 'Two teams kick a ball and try to score goals.', 'basketball', 'hockey'],
     ['swimming', 'You do this sport in water, in a pool or the sea.', 'diving', 'sailing'],
     ['tennis', 'Two players hit a small yellow ball over a net with a racket.', 'badminton', 'golf'],
@@ -142,7 +142,7 @@ export const SETS = [
     ['skateboarding', 'You ride on a small board with four wheels.', 'skiing', 'cycling'],
     ['gaming', 'You play video games on a computer or a console.', 'reading', 'chess'],
   ] },
-  { id: 'clothes', title: 'Clothes', level: 'A1', icon: 'penguin', words: [
+  { id: 'clothes', title: 'Clothes', level: 'A1', icon: 'penguin', hat: 'santa', words: [
     ['hat', 'You wear it on your head.', 'scarf', 'gloves'],
     ['scarf', 'A long warm thing you wear around your neck in winter.', 'hat', 'tie'],
     ['gloves', 'They keep your hands warm. They have fingers.', 'socks', 'scarf'],
