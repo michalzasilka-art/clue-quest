@@ -2,25 +2,38 @@
 // round read the clue and tap one of 3 words → right/wrong, metres climbed, streak bonus, height and place → final.
 import { $, $$, esc, store, show, ordinal } from './ui.js';
 import { phoneWorld } from './world.js';
-import { HEROES, HATS, spriteURL, hatURL, balloonsURL } from './sprites.js';
+import { HEROES, HATS, heroURL, heroFrame, artReady, hatURL, balloonsURL } from './sprites.js';
 import { joinGame, cleanCode } from './net.js';
 import { sfx, unlock } from './sound.js';
 
-phoneWorld($('#sky'));
+const cam = phoneWorld($('#sky'));
 const LETTERS = ['a', 'b', 'c'];
 const flyer = (id) => `<div class="flyer ${id}"><img class="px-img fbal" alt=""><img class="px-img fhero" alt=""></div>`;
 
 $('#app').innerHTML = `
-<section class="screen" id="join"><div class="col">
+<section class="screen" id="menu"><div class="col">
+  <div class="spacer"></div>
+  <div class="logo big">CLUE<br><i>QUEST</i></div>
+  <div class="tagline">THE BALLOON CLIMB</div>
+  <div class="spacer"></div>
+  <div class="best-chip px" id="bestChip" hidden></div>
+  <div class="modes" id="modes"><button class="mode on" data-m="solo">INDIVIDUAL</button><button class="mode" data-m="board">SMART BOARD</button></div>
+  <p class="mode-note" id="modeNote"></p>
+  <button class="btn px green" id="menuGo">START</button>
+  <button class="btn px ghost" id="menuJoin">JOIN A CLASS WITH A CODE</button>
+  <div style="height:8px"></div>
+</div></section>
+
+<section class="screen" id="join" hidden><div class="col">
   <div class="logo">CLUE<br><i>QUEST</i></div>
   <div class="card px">
     <h2>GAME CODE</h2>
     <div class="digits" id="digits">${'<span class="px"></span>'.repeat(6)}<input id="codeIn" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="6" aria-label="Game code"></div>
     <p class="err" id="joinErr"></p>
-    <button class="btn px" id="codeGo">NEXT ▶</button>
+    <button class="btn px" id="codeGo">NEXT</button>
   </div>
   <p class="hint">Type the code from the big screen, or scan its QR code.</p>
-  <div class="join-crew">${HEROES.map((h, i) => `<img class="px-img hop" style="animation-delay:${-i * .13}s" src="${spriteURL(h.id, { hat: HATS[(i % (HATS.length - 1)) + 1].id })}" alt="">`).join('')}</div>
+  <div class="join-crew">${HEROES.map((h, i) => `<img class="px-img hop" style="animation-delay:${-i * .13}s" src="${heroURL(h.id, { hat: HATS[(i % (HATS.length - 1)) + 1].id })}" alt="">`).join('')}</div>
 </div></section>
 
 <section class="screen" id="me" hidden><div class="col">
@@ -34,7 +47,7 @@ $('#app').innerHTML = `
     <h2 style="margin-top:16px">YOUR NAME</h2>
     <input class="namebox" id="nameIn" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Your name">
     <p class="err" id="meErr"></p>
-    <button class="btn px green" id="meGo">JOIN GAME ▶</button>
+    <button class="btn px green" id="meGo">JOIN GAME</button>
   </div>
 </div></section>
 
@@ -75,7 +88,7 @@ $('#app').innerHTML = `
 <section class="screen" id="lost" hidden><div class="col">
   <div class="spacer"></div>
   <div class="verdict no" id="lostTitle">OH NO!</div>
-  <div class="card px"><p id="lostMsg" style="font-size:18px;margin:0 0 16px">The connection to the game was lost.</p><button class="btn px" id="rejoin">JOIN AGAIN ▶</button><button class="btn px ghost" id="newCode" style="margin-top:16px">ANOTHER CODE</button></div>
+  <div class="card px"><p id="lostMsg" style="font-size:18px;margin:0 0 16px">The connection to the game was lost.</p><button class="btn px" id="rejoin">JOIN AGAIN</button><button class="btn px ghost" id="newCode" style="margin-top:16px">ANOTHER CODE</button></div>
   <div class="spacer"></div>
 </div></section>`;
 
@@ -88,14 +101,18 @@ const me = {
   hat: HATS.some((h) => h.id === saved.hat) ? saved.hat : 'santa',
 };
 const save = () => store.set('clue-me', { pid: me.pid, name: me.name, char: me.char, hat: me.hat, code: game ? game.code : saved.code, at: Date.now() });
-let game = null, code = '', editing = false, cur = null, picked = null, tbarT = null, joining = false, streak = 0;
+let game = null, code = '', editing = false, cur = null, picked = null, tbarT = null, joining = false, streak = 0, soloMode = false;
 // a hero hanging from balloons (more balloons with a streak, a golden one from 3 in a row)
 function drawFlyer(which, s = streak) {
   for (const f of $$('.flyer.' + which)) {
-    f.querySelector('.fhero').src = spriteURL(me.char, { hat: me.hat, scale: 6 });
+    f.querySelector('.fhero').src = heroURL(me.char, { hat: me.hat, scale: 6 });
     f.querySelector('.fbal').src = balloonsURL(3 + Math.min(3, s), s >= 3, 1, 6);
   }
 }
+
+// the painted heroes: redraw what is on screen once they have loaded, and let the big hero on each screen animate
+artReady.then(() => { drawPicks(); for (const w of ['pick', 'waiting', 'result', 'final']) drawFlyer(w); $$('.join-crew img').forEach((im, i) => { im.src = heroURL(HEROES[i].id, { hat: HATS[(i % (HATS.length - 1)) + 1].id }); }); });
+setInterval(() => { const t = performance.now(); for (const f of $$('.flyer')) if (f.offsetParent) { const im = f.querySelector('.fhero'), src = heroURL(me.char, { hat: me.hat, frame: heroFrame(t, 1, f.classList.contains('up')), scale: 6 }); if (im.getAttribute('src') !== src) im.src = src; } }, 120);
 
 // ---------- code ----------
 const codeIn = $('#codeIn');
@@ -115,7 +132,7 @@ function goCode() {
 
 // ---------- hero, hat and name ----------
 function drawPicks() {
-  $('#heroes').innerHTML = HEROES.map((h) => `<button class="hero${h.id === me.char ? ' on' : ''}${h.ours ? ' ours' : ''}" data-id="${h.id}"><img class="px-img${h.id === me.char ? ' hop' : ''}" src="${spriteURL(h.id, { hat: me.hat })}" alt="">${esc(h.name)}</button>`).join('');
+  $('#heroes').innerHTML = HEROES.map((h) => `<button class="hero${h.id === me.char ? ' on' : ''}${h.ours ? ' ours' : ''}" data-id="${h.id}"><img class="px-img${h.id === me.char ? ' hop' : ''}" src="${heroURL(h.id, { hat: me.hat })}" alt="">${esc(h.name)}</button>`).join('');
   $('#hats').innerHTML = HATS.map((t) => `<button class="hatb${t.id === me.hat ? ' on' : ''}" data-id="${t.id}" title="${esc(t.name)}"><img class="px-img" src="${hatURL(t.id)}" alt="${esc(t.name)}"></button>`).join('');
   drawFlyer('pick');
 }
@@ -125,7 +142,8 @@ function bounce() { const f = $('.flyer.pick'); f.classList.remove('boing'); voi
 function openMe(edit) {
   editing = edit;
   $('#nameIn').value = me.name; $('#meErr').textContent = '';
-  $('#meGo').textContent = edit ? 'SAVE ▶' : 'JOIN GAME ▶';
+  $('#meGo').textContent = soloMode ? 'NEXT' : edit ? 'SAVE' : 'JOIN GAME';
+  $('#meCode').hidden = soloMode;
   $('#meCode').textContent = 'GAME ' + code.slice(0, 3) + ' ' + code.slice(3);
   drawPicks(); show('me');
 }
@@ -135,6 +153,7 @@ $('#meGo').onclick = async () => {
   const n = $('#nameIn').value.replace(/\s+/g, ' ').trim();
   if (!n) { $('#meErr').textContent = 'Type your name first.'; $('#nameIn').focus(); return; }
   me.name = n.slice(0, 14); save(); sfx.tap();
+  if (soloMode) { import('./solo.js?v=8').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
   if (editing && game) { game.send({ type: 'look', name: me.name, char: me.char, hat: me.hat }); drawWait(); show('wait'); return; }
   connect();
 };
@@ -147,7 +166,7 @@ async function connect() {
   try {
     game = await joinGame(code, me);
   } catch (e) {
-    joining = false; $('#meGo').disabled = false; $('#meGo').textContent = 'JOIN GAME ▶'; $('#rejoin').disabled = false;
+    joining = false; $('#meGo').disabled = false; $('#meGo').textContent = 'JOIN GAME'; $('#rejoin').disabled = false;
     if (e.code === 'no such game' || e.code === 'bad code' || e.code === 'kicked') {
       if (document.body.dataset.screen === 'lost') { lost(e.message); return; }
       show('join'); codeIn.value = ''; drawDigits(); $('#joinErr').textContent = e.message; return;
@@ -239,7 +258,24 @@ function onEnd(m) {
   if (m.place <= 3) sfx.right();
 }
 
-// ---------- start: straight in from the QR code (?code=123456), back in after a reload, or type the code ----------
+// ---------- the start menu: Individual (play alone) or Smart Board (the class game on a big screen) ----------
+let mode = store.get('clue-mode', 'solo');
+const NOTES = { solo: 'Play alone on this device: read the clue, pick the word and race three flyers up to the North Star.', board: 'The teacher opens the game on the class board; everyone joins on their phone with a code.' };
+function drawModes() { $$('#modes .mode').forEach((b) => b.classList.toggle('on', b.dataset.m === mode)); $('#modeNote').textContent = NOTES[mode]; }
+$('#modes').addEventListener('click', (e) => { const b = e.target.closest('.mode'); if (!b) return; unlock(); sfx.pick(); mode = b.dataset.m; store.set('clue-mode', mode); drawModes(); });
+function openMenu() {
+  soloMode = false; cam.rest(); drawModes();
+  const best = store.get('clue-best', 0); $('#bestChip').hidden = !best; $('#bestChip').textContent = 'YOUR BEST: ' + best + ' m';
+  show('menu');
+}
+$('#menuGo').onclick = () => {
+  unlock(); sfx.tap();
+  if (mode === 'board') { location.href = new URL('./?host', location.href).href; return; }
+  soloMode = true; openMe(false);
+};
+$('#menuJoin').onclick = () => { unlock(); sfx.tap(); soloMode = false; codeIn.value = ''; drawDigits(); show('join'); };
+
+// ---------- start: straight in from the QR code (?code=123456), back in after a reload, or the menu ----------
 const urlCode = cleanCode(new URLSearchParams(location.search).get('code'));
 drawDigits();
 if (urlCode.length === 6) {
@@ -247,4 +283,4 @@ if (urlCode.length === 6) {
   // the same game a moment ago on this phone (it slept or reloaded): straight back in as the same player
   if (me.name && saved.code === urlCode && Date.now() - (saved.at || 0) < 3 * 3600e3) { openMe(false); connect(); }
   else openMe(false);
-} else show('join');
+} else openMenu();

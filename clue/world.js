@@ -1,4 +1,4 @@
-// Clue Quest: the balloon flight world, drawn smooth (not pixelated) on a full-resolution canvas. World units:
+// Clue Quest: the balloon flight world, drawn as pixel art: a small canvas shown big with crisp pixels. World units:
 // 320 wide, 2160 tall; the teacher's 16:9 screen shows a 320 × 180 window of it, and a camera glides up and down.
 // Bottom to top: a snowy Christmas village at twilight (hills, mountains, pines, lit cabins, the big tree) → the
 // low sky with drifting clouds, birds and hot-air balloons → the cloud sea → the high blue sky with a plane →
@@ -7,24 +7,30 @@
 // snow falls near the ground, stars twinkle and shoot, the aurora waves.
 // phoneWorld() draws the same village and sky behind a phone.
 
-export const W = 320, VH = 180, WH = 2160;
+// The map: one painted picture 960 × 7250 px (five ChatGPT sky pictures and the snowy forest clearing, cross-faded;
+// built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 3 px per world unit.
+// 0 m at the forest floor up to 1500 m at the North Star.
+export const W = 320, VH = 180, WH = 2417;
+const MAP = { slices: 7, slicePx: 1200, heightPx: 7250, pxPerUnit: 3 };
+const O = WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
 export const GROUND = WH - 20;       // where the heroes stand in the village
-export const TOPY = 64;              // the North Star: the top of the flight
+export const TOPY = 56;              // the North Star in the painted sky: the top of the flight (1500 m)
 export const ZONES = [               // [name, the zone starts above this y]
-  ['Snowy Village', WH], ['Treetops', 2010], ['Cloud Sea', 1420], ['High Sky', 1080], ['Aurora Sky', 760], ['Starry Night', 430], ['North Star', 150]];
+  ['Snowy Forest', WH], ['Treetops', 2203], ['Snowy Peaks', 1800], ['Cloud Sea', 1350], ['Aurora Sky', 900], ['Starry Night', 450], ['North Star', 130]];
 export const zoneAt = (y) => { let z = ZONES[0][0]; for (const [n, top] of ZONES) if (y < top) z = n; return z; };
-const GTOP = 1790;                   // the ground picture covers y 1790 … 2160
+let GTOP = WH - 370;                 // the ground picture covers y GTOP … WH (the painted forest: WH − 213)
 
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const lerp = (a, b, f) => a + (b - a) * f;
 const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
-const SKY = [[0, '#04050f'], [430, '#0d1240'], [760, '#1b2873'], [1080, '#2f4aa8'], [1420, '#5577d4'], [1780, '#86a6ec'], [2000, '#b9c8f4'], [2160, '#f6c9d6']];
+const SKY = [[0, '#04050f'], [430, '#0d1240'], [760, '#1b2873'], [1080, '#2f4aa8'], [1420, '#5577d4'], [1780, '#86a6ec'], [2000, '#b9c8f4'], [2160, '#f6c9d6']].map(([y, c]) => [y ? y + O : 0, c]);
+function mix(a, b, f) { const p = (c) => c.match(/\d+/g).map(Number), x = p(a), y = p(b); return `rgb(${x.map((v, k) => Math.round(lerp(v, y[k], f))).join(',')})`; }
 function skyAt(y) {
   for (let i = 1; i < SKY.length; i++) if (y <= SKY[i][0]) {
     const [y0, c0] = SKY[i - 1], [y1, c1] = SKY[i], f = Math.max(0, (y - y0) / (y1 - y0)), a = hex(c0), b = hex(c1);
     return `rgb(${a.map((v, k) => Math.round(lerp(v, b[k], f))).join(',')})`;
   }
-  return SKY[SKY.length - 1][1];
+  const [r, g, b] = hex(SKY[SKY.length - 1][1]); return `rgb(${r},${g},${b})`;
 }
 
 // ---------- pictures drawn once ----------
@@ -141,31 +147,39 @@ function hotAirBalloon(g, x, y, r, a, b) {
 function scene(canvas, { viewW, phone }) {
   const g = canvas.getContext('2d');
   const rand = rng(17);
-  let s = 4, vw = viewW, vh = VH, ground = null;
+  let s = 4, vw = viewW || W, vh = VH, ground = null, free = false;
   const clouds = [];
   const sprites = [0, 1, 2, 3, 4, 5].map((i) => cloudSprite(rng(40 + i), 50 + i * 12, false));
   const nightSprites = [0, 1, 2, 3].map((i) => cloudSprite(rng(60 + i), 54 + i * 14, true));
   for (let i = 0; i < 70; i++) {
     let y; const r = rand();
-    if (r < .42) y = 1220 + rand() * 260;           // the cloud sea
-    else if (r < .75) y = 1500 + rand() * 340;      // the low sky
-    else y = 700 + rand() * 520;                    // thin high clouds
-    const night = y < 1150, sp = night ? nightSprites : sprites;
+    if (r < .42) y = 1220 + O + rand() * 260;       // the cloud sea
+    else if (r < .75) y = 1500 + O + rand() * 340;  // the low sky
+    else y = 700 + O + rand() * 520;                // thin high clouds
+    const night = y < 1150 + O, sp = night ? nightSprites : sprites;
     clouds.push({ x: rand() * (W + 120) - 60, y, img: sp[Math.floor(rand() * sp.length)], k: .5 + rand() * .7, v: .03 + rand() * .09, a: night ? .35 + rand() * .25 : .75 + rand() * .25 });
   }
   clouds.sort((a, b) => a.k - b.k);
-  const stars = Array.from({ length: 520 }, () => ({ x: rand() * W, y: Math.pow(rand(), 1.7) * 1500, r: .25 + rand() * .7, p: rand() * 9 }));
+  const stars = Array.from({ length: 520 }, () => ({ x: rand() * W, y: Math.pow(rand(), 1.7) * (1500 + O), r: .25 + rand() * .7, p: rand() * 9 }));
   const flakes = Array.from({ length: 160 }, () => ({ x: rand() * W, y: rand(), v: .25 + rand() * .45, d: rand() * 6, r: .3 + rand() * .9 }));
-  const birds = Array.from({ length: 9 }, (_, i) => ({ x: rand() * W, y: 1560 + (i % 3) * 70 + rand() * 30, v: .12 + rand() * .1, p: rand() * 6 }));
-  const balloons = [[60, 1640, 9, '#ff5a6a', '#ffd24a'], [250, 1560, 7, '#4a8aff', '#ffffff'], [150, 1720, 6, '#3ac85a', '#ffd24a'], [290, 1880, 5, '#a86aff', '#ff8ad8']].map(([x, y, r, a, b]) => ({ x, y, r, a, b, v: .04 + r * .004 }));
+  const birds = Array.from({ length: 9 }, (_, i) => ({ x: rand() * W, y: 1560 + O + (i % 3) * 70 + rand() * 30, v: .12 + rand() * .1, p: rand() * 6 }));
+  const balloons = [[60, 1640, 9, '#ff5a6a', '#ffd24a'], [250, 1560, 7, '#4a8aff', '#ffffff'], [150, 1720, 6, '#3ac85a', '#ffd24a'], [290, 1880, 5, '#a86aff', '#ff8ad8']].map(([x, y, r, a, b]) => ({ x, y: y + O, r, a, b, v: .04 + r * .004 }));
   let camY = WH - VH, target = camY, onFrame = null, shoot = null;
+  // the painted map, in slices; until every slice is in, the drawn sky and village show instead
+  const slices = Array(MAP.slices).fill(null); let painted = false; const forestSky = null;
+  slices.forEach((_, i) => { const im = new Image(); im.onload = () => { slices[i] = im; painted = slices.every(Boolean); }; im.src = new URL(`art/map-${i}.webp`, import.meta.url).href; });
+  const SLEIGH_Y = 640, PLANE_Y = 1010;   // in the aurora picture / over the cloud sea
   function fit() {
-    const cw = Math.min(1920, Math.round(canvas.clientWidth * (devicePixelRatio || 1))) || 960;
-    const ch = Math.round(cw * canvas.clientHeight / Math.max(1, canvas.clientWidth)) || 540;
-    canvas.width = cw; canvas.height = ch;
-    s = cw / vw; vh = ch / s;
-    ground = buildGround(Math.min(6, Math.max(2, s)));
-    if (phone) camY = target = WH - vh;
+    // pixel art: a smaller canvas shown big with crisp pixels, about 2.4 device pixels per art pixel (fine, like
+    // a detailed pixel-art game). Landscape screens see the whole 320-wide world, portrait phones the middle 190.
+    const cssW = canvas.clientWidth || 960, cssH = canvas.clientHeight || 540;
+    vw = viewW || (cssW > cssH * 1.1 ? W : 190);
+    const px = Math.max(1.2, Math.min(4, cssW * (devicePixelRatio || 1) / 2.4 / vw));
+    const cw = Math.round(vw * px), ch = Math.round(cw * cssH / cssW);
+    canvas.width = cw; canvas.height = ch; g.imageSmoothingEnabled = false;
+    s = px; vh = ch / s;
+    ground = buildGround(2);
+    if (phone && !free) camY = target = WH - vh;
   }
   fit(); addEventListener('resize', fit);
   const x0 = () => (W - vw) / 2;   // the phone shows the middle of the world
@@ -177,26 +191,35 @@ function scene(canvas, { viewW, phone }) {
     camY += (target - camY) * .07; if (Math.abs(target - camY) < .05) camY = target;
     const cw = canvas.width, ch = canvas.height;
     const sk = g.createLinearGradient(0, 0, 0, ch);
-    sk.addColorStop(0, skyAt(camY)); sk.addColorStop(.5, skyAt(camY + vh / 2)); sk.addColorStop(1, skyAt(camY + vh));
+    const sc = (y) => (forestSky && y > GTOP - 160 ? mix(skyAt(y), forestSky, Math.min(1, (y - (GTOP - 160)) / 160)) : skyAt(y));
+    sk.addColorStop(0, sc(camY)); sk.addColorStop(.5, sc(camY + vh / 2)); sk.addColorStop(1, sc(camY + vh));
     g.fillStyle = sk; g.fillRect(0, 0, cw, ch);
     const vis = (y, m = 40) => y > camY - m && y < camY + vh + m;
+    if (painted) {
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+      slices.forEach((im, i) => {
+        const top = i * MAP.slicePx / MAP.pxPerUnit, h = im.height / MAP.pxPerUnit;
+        if (top < camY + vh && top + h > camY) g.drawImage(im, Math.round(X(0)), Math.round(Y(top)), Math.round(W * s), Math.round(h * s) + 1);
+      });
+      g.imageSmoothingEnabled = false;
+    }
     for (const st of stars) if (vis(st.y, 2)) {
-      const dark = Math.max(0, Math.min(1, (1500 - st.y) / 700)), tw = .55 + .45 * Math.sin(t / 700 + st.p);
-      g.globalAlpha = dark * tw; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(X(st.x), Y(st.y), st.r * s * .5, 0, 7); g.fill();
+      const dark = painted ? Math.max(0, Math.min(1, (900 - st.y) / 300)) : Math.max(0, Math.min(1, (1500 + O - st.y) / 700)), tw = .55 + .45 * Math.sin(t / 700 + st.p);
+      g.globalAlpha = dark * tw; g.fillStyle = '#ffffff'; const sz = st.r > .7 ? 2 : 1; g.fillRect(Math.round(X(st.x)), Math.round(Y(st.y)), sz, sz);
     }
     g.globalAlpha = 1;
-    if (vis(300, 60)) {
-      const mx = X(250), my = Y(300), mr = 18 * s;
+    if (!painted && vis(300 + O, 60)) {
+      const mx = X(250), my = Y(300 + O), mr = 18 * s;
       const gl = g.createRadialGradient(mx, my, mr * .6, mx, my, mr * 3); gl.addColorStop(0, 'rgba(255,248,220,.35)'); gl.addColorStop(1, 'rgba(255,248,220,0)');
       g.fillStyle = gl; g.beginPath(); g.arc(mx, my, mr * 3, 0, 7); g.fill();
       const md = g.createRadialGradient(mx - mr * .3, my - mr * .3, mr * .1, mx, my, mr); md.addColorStop(0, '#fffdf0'); md.addColorStop(1, '#e8dfb8');
       g.fillStyle = md; g.beginPath(); g.arc(mx, my, mr, 0, 7); g.fill();
       g.fillStyle = 'rgba(190,175,130,.35)'; [[-.35, -.2, .22], [.25, .25, .17], [.05, -.45, .12], [.4, -.25, .1]].forEach(([a, b, r]) => { g.beginPath(); g.arc(mx + a * mr, my + b * mr, r * mr, 0, 7); g.fill(); });
     }
-    if (vis(640, 160)) {
+    if (!painted && vis(640 + O, 160)) {
       // aurora curtains: a bright wavy lower edge, glowing upward and fading out
       g.globalCompositeOperation = 'lighter';
-      [[600, [62, 232, 168], 0], [660, [56, 200, 232], 2], [720, [168, 106, 255], 4]].forEach(([yb, [r, gg, b], k]) => {
+      [[600 + O, [62, 232, 168], 0], [660 + O, [56, 200, 232], 2], [720 + O, [168, 106, 255], 4]].forEach(([yb, [r, gg, b], k]) => {
         for (let x = 0; x <= W; x += 1.6) {
           const edge = yb + 16 * Math.sin(x / 42 + t / 3200 + k) + 7 * Math.sin(x / 13 + t / 2100 + k * 1.7);
           const len = 38 + 18 * Math.sin(x / 21 + t / 2600 + k), glow = .28 + .14 * Math.sin(x / 9 + t / 900 + k);
@@ -209,15 +232,17 @@ function scene(canvas, { viewW, phone }) {
     }
     if (vis(TOPY, 80)) {
       const sx = X(160), sy = Y(TOPY), p = .75 + .25 * Math.sin(t / 500);
-      const gl = g.createRadialGradient(sx, sy, 0, sx, sy, 40 * s); gl.addColorStop(0, `rgba(255,240,170,${.7 * p})`); gl.addColorStop(1, 'rgba(255,240,170,0)');
+      const gl = g.createRadialGradient(sx, sy, 0, sx, sy, 40 * s); gl.addColorStop(0, `rgba(255,240,170,${(painted ? .35 : .7) * p})`); gl.addColorStop(1, 'rgba(255,240,170,0)');
       g.fillStyle = gl; g.beginPath(); g.arc(sx, sy, 40 * s, 0, 7); g.fill();
+      if (!painted) {
       g.save(); g.translate(sx, sy); g.rotate(t / 6000);
       g.fillStyle = '#fff4c0';
       for (let k = 0; k < 4; k++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, -24 * s * p); g.lineTo(2.2 * s, 0); g.lineTo(-2.2 * s, 0); g.fill(); }
       g.restore();
       g.fillStyle = '#ffd24a'; g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 ? 3.5 : 8) * s; g.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r); } g.fill();
+      }
     }
-    if (camY < 1000) {
+    if (camY < 1000 + O) {
       if (!shoot && Math.random() < .012) shoot = { x: Math.random() * W, y: camY + Math.random() * vh * .5, a: 0 };
       if (shoot) {
         shoot.a += 1; const hx = shoot.x + shoot.a * 4, hy = shoot.y + shoot.a * 1.6;
@@ -227,8 +252,8 @@ function scene(canvas, { viewW, phone }) {
       }
     }
     const slx = ((t / 45) % 1100) - 160;
-    if (vis(600, 30) && slx < W + 40) {
-      const x = X(slx), y = Y(600 + 4 * Math.sin(t / 700)), u = s;
+    if (vis(SLEIGH_Y, 30) && slx < W + 40) {
+      const x = X(slx), y = Y(SLEIGH_Y + 4 * Math.sin(t / 700)), u = s;
       g.fillStyle = 'rgba(20,16,40,.9)';
       for (const [dx, ph] of [[24, 0], [38, 1.3]]) { const bob = Math.sin(t / 180 + ph) * 1.2 * u; g.beginPath(); g.ellipse(x + dx * u, y + bob, 4.5 * u, 2 * u, 0, 0, 7); g.fill(); g.fillRect(x + (dx + 3) * u, y - 4 * u + bob, 1.2 * u, 3 * u); g.fillRect(x + (dx - 3) * u, y + 1 * u + bob, .8 * u, 3 * u); g.fillRect(x + (dx + 2) * u, y + 1 * u + bob, .8 * u, 3 * u); }
       g.fillStyle = '#c83040'; g.beginPath(); g.moveTo(x - 6 * u, y - 3 * u); g.lineTo(x + 12 * u, y - 3 * u); g.quadraticCurveTo(x + 16 * u, y + 3 * u, x + 8 * u, y + 4 * u); g.lineTo(x - 4 * u, y + 4 * u); g.closePath(); g.fill();
@@ -236,16 +261,17 @@ function scene(canvas, { viewW, phone }) {
       for (let k = 0; k < 8; k++) { g.fillStyle = `rgba(255,242,160,${.8 - k * .1})`; g.beginPath(); g.arc(x - (8 + k * 4) * u, y + Math.sin(t / 200 + k) * u, (1.2 - k * .1) * u, 0, 7); g.fill(); }
     }
     const plx = ((t / 70) % 900) - 120;
-    if (vis(960, 20) && plx < W + 20) {
-      const x = X(plx), y = Y(960), u = s;
+    if (vis(PLANE_Y, 20) && plx < W + 20) {
+      const x = X(plx), y = Y(PLANE_Y), u = s;
       const tr = g.createLinearGradient(x - 70 * u, y, x, y); tr.addColorStop(0, 'rgba(255,255,255,0)'); tr.addColorStop(1, 'rgba(255,255,255,.55)');
       g.strokeStyle = tr; g.lineWidth = 1 * u; g.beginPath(); g.moveTo(x - 70 * u, y + .5 * u); g.lineTo(x - 6 * u, y + .5 * u); g.stroke();
       g.fillStyle = '#e8ecf8'; g.beginPath(); g.ellipse(x, y, 6 * u, 1.3 * u, 0, 0, 7); g.fill();
       g.beginPath(); g.moveTo(x - 1 * u, y); g.lineTo(x - 4 * u, y + 4 * u); g.lineTo(x - 2 * u, y); g.fill();
       if ((t / 400 | 0) % 2) { g.fillStyle = '#ff4a5a'; g.beginPath(); g.arc(x - 5 * u, y - 1 * u, .9 * u, 0, 7); g.fill(); }
     }
-    for (const c of clouds) {
+    for (const [ci, c] of clouds.entries()) {
       c.x += c.v; if (c.x > W + 70) c.x = -90;
+      if (painted) continue;   // the painted map has its own clouds
       const w = c.img.width / 4 * c.k, h = c.img.height / 4 * c.k;
       if (!vis(c.y, h + 10)) continue;
       g.globalAlpha = c.a; g.drawImage(c.img, X(c.x), Y(c.y - h / 2), w * s, h * s);
@@ -263,7 +289,16 @@ function scene(canvas, { viewW, phone }) {
       const f = Math.sin(t / 160 + bd.p) * 2.2, x = X(bd.x), y = Y(bd.y + Math.sin(t / 900 + bd.p) * 2), u = s * .5;
       g.beginPath(); g.moveTo(x - 4 * u, y - f * u); g.quadraticCurveTo(x - 1.5 * u, y - 1 * u, x, y); g.quadraticCurveTo(x + 1.5 * u, y - 1 * u, x + 4 * u, y - f * u); g.stroke();
     }
-    if (camY + vh > GTOP) {
+    if (painted && camY + vh > WH - 230) {
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+      g.imageSmoothingEnabled = false;
+      // soft glints drifting over the snow
+      for (let k = 0; k < 14; k++) {
+        const gx = (k * 47 + t / 90 * (k % 3 + 1)) % W, gy = WH - 20 - ((k * 31) % 90) - 6 * Math.sin(t / 900 + k);
+        g.globalAlpha = .5 + .5 * Math.sin(t / 400 + k * 2); g.fillStyle = k % 4 ? '#ffffff' : '#ffe9a8'; g.fillRect(Math.round(X(gx)), Math.round(Y(gy)), 1, 1);
+      }
+      g.globalAlpha = 1;
+    } else if (camY + vh > GTOP) {
       g.drawImage(ground.canvas, X(0), Y(GTOP), W * s, (WH - GTOP) * s);
       const cols = ['#ff4a5a', '#ffd24a', '#4aee7a', '#5aa8ff', '#ff8ad8'];
       for (const [i, e] of ground.eaves.entries()) for (let x = e.x0; x < e.x1; x += 3) { const on = Math.sin(t / 300 + x + i) > -.2; g.fillStyle = cols[((x | 0) + i) % 5]; g.globalAlpha = on ? 1 : .35; g.beginPath(); g.arc(X(x), Y(e.y + 1), .9 * s * .5, 0, 7); g.fill(); }
@@ -279,12 +314,12 @@ function scene(canvas, { viewW, phone }) {
       const gl = g.createRadialGradient(sx, sy, 0, sx, sy, 9 * s); gl.addColorStop(0, `rgba(255,240,160,${.8 * sp})`); gl.addColorStop(1, 'rgba(255,240,160,0)'); g.fillStyle = gl; g.beginPath(); g.arc(sx, sy, 9 * s, 0, 7); g.fill();
       g.fillStyle = '#ffd24a'; g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 ? 1.6 : 4) * s; g.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r); } g.fill();
     }
-    const snowy = Math.max(0, Math.min(1, (camY - 1500) / 400));
+    const snowy = Math.max(0, Math.min(1, (camY - 1500 - O) / 400));
     if (snowy > 0) {
       g.fillStyle = '#ffffff';
       for (const f of flakes) {
         f.y += f.v / vh; f.d += .03; if (f.y > 1) { f.y = 0; f.x = Math.random() * W; }
-        g.globalAlpha = snowy * .85; g.beginPath(); g.arc(X(f.x + Math.sin(f.d) * 2.5), f.y * ch, f.r * s * .5, 0, 7); g.fill();
+        g.globalAlpha = snowy * .9; const sz = f.r > .8 ? 2 : 1; g.fillRect(Math.round(X(f.x + Math.sin(f.d) * 2.5)), Math.round(f.y * ch), sz, sz);
       }
       g.globalAlpha = 1;
     }
@@ -293,10 +328,12 @@ function scene(canvas, { viewW, phone }) {
   requestAnimationFrame(frame);
   return {
     get y() { return camY; },
-    look(y, now) { target = Math.max(0, Math.min(WH - vh, y)); if (now) camY = target; },
+    look(y, now) { free = true; target = Math.max(0, Math.min(WH - vh, y)); if (now) camY = target; },
+    rest(now) { free = false; target = WH - vh; if (now) camY = target; },   // back to the ground (phones)
+    get viewH() { return vh; }, get viewW() { return vw; },
     onFrame(fn) { onFrame = fn; },
   };
 }
 
 export function world(canvas) { return scene(canvas, { viewW: W }); }
-export function phoneWorld(canvas) { return scene(canvas, { viewW: 190, phone: true }); }
+export function phoneWorld(canvas) { return scene(canvas, { phone: true }); }

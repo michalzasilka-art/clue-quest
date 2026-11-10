@@ -4,19 +4,19 @@
 // tags on top, the biggest streak shown → next clue → podium. This browser is the game: players, heights, clock.
 import { $, $$, esc, shuffle, store, show, qrCanvas, confetti, ordinal } from './ui.js';
 import { world, W as WW, VH, WH, GROUND, TOPY, ZONES, zoneAt } from './world.js';
-import { HEROES, HATS, spriteURL, balloonsURL } from './sprites.js';
+import { HEROES, HATS, heroURL, heroFrame, artReady, balloonsURL } from './sprites.js';
 import { SETS, setById, parseCustom } from './words.js';
 import { hostGame } from './net.js';
 import { sfx, unlock, music, setMuted, isMuted } from './sound.js';
 
 const LETTERS = ['a', 'b', 'c'];
-const img = (id, hat = 'none', cls = '') => `<img class="px-img hero-img ${cls}" src="${spriteURL(id, { hat })}" alt="">`;
+const img = (id, hat = 'none', cls = '') => `<img class="px-img hero-img ${cls}" src="${heroURL(id, { hat })}" alt="">`;
 
 $('#app').innerHTML = `
 <div class="stage" id="worldStage"><canvas id="world"></canvas><div id="tokens"></div>
   <div id="ruler"><div class="rail"></div><div id="rulerZones"></div><div id="rulerView"></div><div id="rulerHeads"></div></div>
   <div id="zoneBanner" hidden></div></div>
-<div class="corner"><button class="btn px ghost" id="muteBtn" title="Sound on/off (M)">SOUND ON</button></div>
+<div class="corner"><button class="btn px ghost" id="menuBtn" title="Back to the start menu">MENU</button><button class="btn px ghost" id="muteBtn" title="Sound on/off (M)">SOUND ON</button></div>
 <section class="screen" id="setup"><div class="stage">
   <div class="logo">CLUE <i>QUEST</i></div>
   <div class="sub">Read the clue, pick the word on your phone, and fly your balloons up to the North Star!</div>
@@ -24,7 +24,7 @@ $('#app').innerHTML = `
   <div id="options">
     <div class="choice px" data-k="rounds"><span>QUESTIONS</span><button class="px" data-v="5">5</button><button class="px" data-v="10">10</button><button class="px" data-v="15">15</button><button class="px" data-v="0">ALL</button></div>
     <div class="choice px" data-k="secs"><span>SECONDS</span><button class="px" data-v="10">10</button><button class="px" data-v="20">20</button><button class="px" data-v="30">30</button></div>
-    <button class="btn px green" id="create">CREATE GAME ▶</button>
+    <button class="btn px green" id="create">CREATE GAME</button>
   </div>
   <div class="modal" id="mine" hidden><div class="px">
     <h2>MY WORDS</h2>
@@ -46,8 +46,8 @@ $('#app').innerHTML = `
   <div class="bar">
     <div class="count px"><span id="count">0</span> PLAYERS</div>
     <div class="topic px" id="lobbyTopic"></div>
-    <button class="btn px ghost" id="backSetup">◀ TOPIC</button>
-    <button class="btn px green" id="startBtn" disabled>LIFT OFF ▶</button>
+    <button class="btn px ghost" id="backSetup">TOPIC</button>
+    <button class="btn px green" id="startBtn" disabled>LIFT OFF</button>
   </div>
 </div></section>
 
@@ -55,7 +55,7 @@ $('#app').innerHTML = `
   <div id="clue" class="px"><div class="cl-top"><span id="qNum">1 / 10</span><span id="qTopic"></span></div><p id="clueText"></p><small>ANSWER ON YOUR PHONE!</small></div>
   <div id="timer" class="px"><span id="timerN">20</span><i id="timerBar"></i></div>
   <div id="answered"><div class="px" id="ansCount">0 / 0 ANSWERED</div><div class="faces" id="faces"></div></div>
-  <button class="btn px" id="qSkip">SKIP ▶</button>
+  <button class="btn px" id="qSkip">SKIP</button>
 </div></section>
 
 <section class="screen" id="results" hidden><div class="stage">
@@ -65,22 +65,23 @@ $('#app').innerHTML = `
     <div id="bars"></div>
     <div class="rp-sum" id="rpSum"></div>
   </div>
-  <button class="btn px green" id="resNext">FLY! ▶</button>
+  <button class="btn px green" id="resNext">FLY!</button>
 </div></section>
 
 <section class="screen" id="fly" hidden><div class="stage">
   <div class="board-panel px"><h2>HIGHEST</h2><div id="rows"></div></div>
   <div class="streak-panel px" id="streakPanel"></div>
-  <button class="btn px green" id="flyNext">NEXT CLUE ▶</button>
+  <button class="btn px green" id="flyNext">NEXT CLUE</button>
 </div></section>
 
 <section class="screen" id="podium" hidden><div class="stage">
   <h1 class="logo">WINNERS!</h1>
   <div id="steps"></div>
-  <div class="again"><button class="btn px green" id="againBtn">PLAY AGAIN ▶</button></div>
+  <div class="again"><button class="btn px green" id="againBtn">PLAY AGAIN</button></div>
 </div></section>`;
 
 const cam = world($('#world'));
+artReady.then(() => { setsHTML(); syncTokens(); });   // the painted heroes replace the small ones when they have loaded
 
 // ---------- settings ----------
 const prefs = store.get('clue-host', { set: 'animals', rounds: 10, secs: 20 });
@@ -114,6 +115,7 @@ $('#mineSave').onclick = () => {
   $('#mine').hidden = true; setsHTML();
   if (errors.length) toast(errors[0]);
 };
+$('#menuBtn').onclick = () => { if (phase === 'setup' || confirm('Leave this game and go back to the menu?')) location.href = new URL('./', location.href).href; };
 const muteBtn = $('#muteBtn');
 const drawMute = () => { muteBtn.textContent = isMuted() ? 'SOUND OFF' : 'SOUND ON'; };
 muteBtn.onclick = () => { unlock(); setMuted(!isMuted()); store.set('clue-mute', isMuted()); drawMute(); };
@@ -126,7 +128,7 @@ function toast(text, ms = 3500) {
 // ---------- the game ----------
 const players = new Map();   // pid → { pid, name, char, hat, alt, shown, streak, best, online, last, lane }
 let net = null, phase = 'setup', rounds = [], qi = -1, qStart = 0, qDur = 20000, answers = new Map(), timerT = null, topicTitle = '';
-let lastTick = -1, closeT = null, lanes = 0, topAlt = 1000, lastZone = '';
+let lastTick = -1, closeT = null, lanes = 0, topAlt = 1500, climb = 1.5, lastZone = '';
 const cleanName = (s) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, 14) || 'Player';
 const validChar = (c) => (HEROES.some((h) => h.id === c) ? c : HEROES[0].id);
 const validHat = (h) => (HATS.some((x) => x.id === h) ? h : 'none');
@@ -186,7 +188,8 @@ function pickRounds() {
   topicTitle = prefs.set === 'mine' ? 'My words' : (setById(prefs.set) || SETS[0]).title;
   const n = prefs.rounds ? Math.min(prefs.rounds, words.length) : words.length;
   rounds = shuffle(words).slice(0, n).map(([word, desc, w1, w2]) => { const opts = shuffle([word, w1, w2]); return { word, desc, opts, right: opts.indexOf(word) }; });
-  topAlt = rounds.length * 100;   // a near-perfect flight reaches the North Star
+  topAlt = 1500;                                        // the map: the forest floor (0 m) up to the North Star (1500 m)
+  climb = 15 / Math.max(1, rounds.length);              // metres per answer scale with the game's length, so a great flight reaches the star
 }
 function goLobby() {
   phase = 'lobby'; qi = -1; pickRounds(); lastZone = ZONES[0][0];
@@ -222,7 +225,6 @@ function syncTokens() {
       t = { el, bal: el.querySelector('.bal'), hero: el.querySelector('.hero'), tag: el.querySelector('.tag'), gain: el.querySelector('.gain') };
       toks.set(p.pid, t);
     }
-    const hs = spriteURL(p.char, { hat: p.hat }); if (t.hero.getAttribute('src') !== hs) t.hero.src = hs;
     const b = balloonsFor(p), bs = balloonsURL(b.n, b.gold, p.lane); if (t.bal.getAttribute('src') !== bs) t.bal.src = bs;
     t.tag.textContent = p.name;
     t.el.classList.toggle('off', !p.online);
@@ -249,6 +251,8 @@ cam.onFrame((camY, t) => {
       x = laneX(p.lane) + 1.6 * Math.sin(t / 2300 + p.lane * 1.7);
       y = altY(p.shown) - 6 - (p.lane % 3) * 13 - 3 * Math.sin(t / 900 + p.lane * 2.3);
     }
+    const fr = heroFrame(t, p.lane, phase === 'fly' && tk.el.classList.contains('rise')), hs = heroURL(p.char, { hat: p.hat, frame: fr });
+    if (tk.src !== hs) { tk.hero.src = hs; tk.src = hs; }   // the hero animates: swinging legs, a blink, a cheer while climbing
     tk.el.style.left = x + '%';
     tk.el.style.top = ((y - camY) / VH * 100).toFixed(2) + '%';
     tk.el.style.zIndex = phase === 'lobby' ? 10 + Math.round(y) % 100 : 200 - i;
@@ -260,7 +264,7 @@ cam.onFrame((camY, t) => {
 $('#rulerZones').innerHTML = ZONES.map(([name, top], i) => `<div class="rz" style="top:${((ZONES[i + 1] ? ZONES[i + 1][1] : 0) / WH * 100).toFixed(2)}%;height:${((top - (ZONES[i + 1] ? ZONES[i + 1][1] : 0)) / WH * 100).toFixed(2)}%"><span>${name.toUpperCase()}</span></div>`).join('');
 $('#rulerView').style.height = (VH / WH * 100).toFixed(2) + '%';
 function drawRulerHeads() {
-  $('#rulerHeads').innerHTML = ranked().map((p, i) => `<img class="px-img rh${i === 0 && p.alt > 0 ? ' lead' : ''}" style="top:${(altY(p.shown) / WH * 100).toFixed(2)}%;left:${(i % 3) * 30}%" src="${spriteURL(p.char, { hat: p.hat })}" alt="">`).join('');
+  $('#rulerHeads').innerHTML = ranked().map((p, i) => `<img class="px-img rh${i === 0 && p.alt > 0 ? ' lead' : ''}" style="top:${(altY(p.shown) / WH * 100).toFixed(2)}%;left:${(i % 3) * 30}%" src="${heroURL(p.char, { hat: p.hat })}" alt="">`).join('');
 }
 // the camera keeps the highest flyer in view, under the panels at the top of the screen
 function lookAtLeader(now) { const r = ranked(); const y = r.length ? altY(Math.max(...r.map((p) => p.shown))) : GROUND; cam.look(y - VH * .66, now); }   // below the panels at the top
@@ -272,7 +276,7 @@ $('#tokens').addEventListener('click', (e) => {
   const pid = k.dataset.pid; net.kick(pid); players.delete(pid); refresh();
 });
 $('#create').onclick = () => { unlock(); sfx.tap(); openGame(); };
-$('#backSetup').onclick = () => { sfx.tap(); music(false); phase = 'setup'; show('setup'); $('#create').textContent = 'OPEN LOBBY ▶'; };
+$('#backSetup').onclick = () => { sfx.tap(); music(false); phase = 'setup'; show('setup'); $('#create').textContent = 'OPEN LOBBY'; };
 $('#startBtn').onclick = () => {
   unlock(); music(false); sfx.fly();
   // lift off: everyone rises a little above the village before the first clue
@@ -321,8 +325,9 @@ function answer(pid, m) {
 $('#qSkip').onclick = () => { if (phase === 'q') showResults(); };
 
 // ---------- the answer: how many picked each word ----------
-const gainFor = (t) => 50 + Math.round(50 * Math.max(0, 1 - t / qDur) / 5) * 5;   // 50–100 m, faster = higher
-const streakBonus = (s) => (s >= 2 ? 10 * (Math.min(s, 5) - 1) : 0);              // +10 m … +40 m
+const r5 = (m) => Math.round(m / 5) * 5;
+const gainFor = (t) => r5((50 + 50 * Math.max(0, 1 - t / qDur)) * climb);   // 50–100 m × climb, faster = higher
+const streakBonus = (s) => (s >= 2 ? r5(10 * (Math.min(s, 5) - 1) * climb) : 0); // +10 … +40 m × climb
 function resultFor(pid) {
   const p = players.get(pid), r = rounds[qi] || rounds[rounds.length - 1], l = p.last || { none: true };
   return { ok: !!l.ok, pts: (l.gain || 0) + (l.bonus || 0), gain: l.gain || 0, bonus: l.bonus || 0, none: !!l.none, word: r.word, score: p.alt, alt: p.alt, streak: p.streak, place: placeOf(pid), of: players.size, last: qi === rounds.length - 1, zone: zoneAt(altY(p.alt)) };
@@ -345,7 +350,7 @@ function showResults() {
   const max = Math.max(1, ...counts);
   $('#bars').innerHTML = r.opts.map((o, k) => `<div class="bar-row${k === r.right ? ' win' : ' lose'}"><span class="bw opt-${LETTERS[k]} px"><span class="shape"></span>${esc(o)}</span><span class="bt"><i class="opt-${LETTERS[k]}" style="--w:${(counts[k] / max * 100).toFixed(0)}%"></i></span><b>${counts[k]}</b></div>`).join('');
   $('#rpSum').textContent = `${counts[r.right]} OF ${answers.size} GOT IT RIGHT`;
-  $('#resNext').textContent = 'FLY! ▶';
+  $('#resNext').textContent = 'FLY!';
   show('results'); sfx.reveal();
   for (const p of players.values()) net.send(p.pid, { type: 'res', me: meOf(p), ...resultFor(p.pid) });
   syncTokens();
@@ -362,7 +367,7 @@ function flyUp() {
   $('#streakPanel').innerHTML = best
     ? `<h2>BIGGEST STREAK</h2><div class="sp">${img(best.char, best.hat, 'hop')}<div><b>${esc(best.name)}</b><span class="fire">×${best.streak} IN A ROW</span><small>${best.streak >= 2 ? '+' + streakBonus(best.streak) + ' m STREAK BONUS' : 'ONE MORE FOR A BONUS!'}</small></div></div>`
     : '<h2>BIGGEST STREAK</h2><div class="sp"><small>NOBODY YET: GET TWO IN A ROW!</small></div>';
-  $('#flyNext').textContent = qi === rounds.length - 1 ? 'RESULTS ▶' : 'NEXT CLUE ▶';
+  $('#flyNext').textContent = qi === rounds.length - 1 ? 'RESULTS' : 'NEXT CLUE';
   show('fly'); sfx.fly();
   // "+75 m" over each hero that climbs
   for (const p of players.values()) {
@@ -414,7 +419,7 @@ function podium() {
   for (const p of players.values()) net.send(p.pid, screenFor(p.pid));
 }
 $('#againBtn').onclick = () => {
-  sfx.tap(); phase = 'setup'; show('setup'); cam.look(WH - VH); $('#create').textContent = 'OPEN LOBBY ▶';
+  sfx.tap(); phase = 'setup'; show('setup'); cam.look(WH - VH); $('#create').textContent = 'OPEN LOBBY';
   for (const p of players.values()) { p.alt = 0; p.shown = 0; p.streak = 0; net.send(p.pid, { type: 'wait', me: meOf(p), topic: '' }); }
 };
 
