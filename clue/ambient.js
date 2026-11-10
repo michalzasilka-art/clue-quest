@@ -19,6 +19,8 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (a, b, v) => { const k = clamp((v - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
 const step = (a, n = 4) => Math.round(a * n) / n;   // stepped alpha: the pixel-art way to fade
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const dither = (x, y) => (BAYER4[(y & 3) * 4 + (x & 3)] + .5) / 16 - .5;   // -.5….5, for soft pixel-art shading edges
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; }
 
 // ---------- painted-map landmarks (world units) ----------
@@ -42,7 +44,7 @@ const CLOUD_PAL = {   // rim, lit, body, shade, deep: sampled from the painted c
   day: ['#f6e6f4', '#dcc0ec', '#b9a2f2', '#9c94ee', '#8b85ec'],
   sea: ['#f8e8f3', '#e2c3ea', '#b8a0f2', '#8e88ee', '#7174dd'],
   night: ['#9aa2ee', '#7680e0', '#5f6ad6', '#4e5cca', '#4252c0'],
-  storm: ['#bdb6dc', '#9890c4', '#7a73ac', '#625d94', '#4f4b7e'],
+  storm: ['#c2bbe0', '#a49dcc', '#8f88bc', '#7a74aa', '#625d92'],
 };
 const LEAF_COLS = [['#f39a3e', '#c8602a'], ['#ec5a4c', '#a83a3c'], ['#f6cd4c', '#c8962a'], ['#c47a3e', '#86502c']];
 const BAL_COLS = [['#ff5a6a', '#ffd24a'], ['#4a8aff', '#ffffff'], ['#3ac85a', '#ffe27a'], ['#a86aff', '#ff8ad8'], ['#ff9a3a', '#ffffff']];
@@ -83,21 +85,22 @@ function fromRows(rows, pal) {
 // ---------- clouds: a row of round puffs (small ones low in front), each lit from the upper left, flat underneath ----------
 function cloudSprite(seed, wpx, pal, kind) {
   const r = rng(seed), flat = kind === 'wisp';
-  const h = Math.max(5, Math.round(wpx * (flat ? .22 : kind === 'storm' ? .5 : .46))), base = h - 1, circ = [];
-  const n = flat ? 3 + ((r() * 3) | 0) : 4 + ((r() * 4) | 0);
+  const storm = kind === 'storm';
+  const h = Math.max(5, Math.round(wpx * (flat ? .22 : storm ? .36 : .46))), base = h - 1, circ = [];
+  const n = flat ? 3 + ((r() * 3) | 0) : storm ? 7 + ((r() * 4) | 0) : 4 + ((r() * 4) | 0);
   for (let i = 0; i < n; i++) {
     const f = (i + .5) / n, big = Math.sin(f * Math.PI);
-    const rad = wpx * (flat ? .07 + .05 * r() : .085 + .15 * big * (.7 + .6 * r()));
+    const rad = wpx * (flat ? .07 + .05 * r() : storm ? .06 + .1 * big * (.7 + .6 * r()) : .085 + .15 * big * (.7 + .6 * r()));
     circ.push({ cx: wpx * (.11 + .78 * f) + (r() - .5) * wpx * .07, cy: base - rad * (flat ? .35 : .5) - (flat ? 0 : big * wpx * .05 * r()), rad });
   }
-  if (!flat) for (let k = 0; k < 2; k++) { const rad = wpx * (.06 + .05 * r()); circ.push({ cx: wpx * (.18 + .64 * r()), cy: base - rad * .25, rad }); }
+  if (!flat) for (let k = 0; k < (storm ? 4 : 2); k++) { const rad = wpx * (.05 + .05 * r()); circ.push({ cx: wpx * (.12 + .76 * r()), cy: base - rad * .25, rad }); }
   const Lx = -.5, Ly = -.86;
   const c = canvas(wpx, h), g = c.getContext('2d');
   for (let y = 0; y <= base; y++) for (let x = 0; x < wpx; x++) {
     let own = null;
     for (const q of circ) { const dx = x + .5 - q.cx, dy = y + .5 - q.cy; if (dx * dx + dy * dy <= q.rad * q.rad) own = q; }   // the front-most puff
     if (!own) continue;
-    const nx = (x + .5 - own.cx) / own.rad, ny = (y + .5 - own.cy) / own.rad, lit = nx * Lx + ny * Ly;
+    const nx = (x + .5 - own.cx) / own.rad, ny = (y + .5 - own.cy) / own.rad, lit = nx * Lx + ny * Ly + dither(x, y) * .22;
     let tone = lit > .62 ? 0 : lit > .2 ? 1 : lit > -.3 ? 2 : 3;
     if (y >= base - (flat ? 0 : 1)) tone = Math.max(tone, y === base ? 4 : 3);
     g.fillStyle = pal[tone]; g.fillRect(x, y, 1, 1);
@@ -120,7 +123,7 @@ function wispSprite(seed, wpx, pal) {
     let own = null;
     for (const q of puffs) { const dx = (x + .5 - q.cx) / q.rx, dy = (y + .5 - q.cy) / q.ry; if (dx * dx + dy * dy <= 1) own = q; }
     if (!own) continue;
-    const nx = (x + .5 - own.cx) / own.rx, ny = (y + .5 - own.cy) / own.ry, lit = nx * Lx + ny * Ly;
+    const nx = (x + .5 - own.cx) / own.rx, ny = (y + .5 - own.cy) / own.ry, lit = nx * Lx + ny * Ly + dither(x, y) * .2;
     let tone = lit > .7 ? 0 : lit > .25 ? 1 : lit > -.25 ? 2 : 3;
     if (y === base) tone = 4;
     g.fillStyle = pal[tone]; g.fillRect(x, y, 1, 1);
@@ -288,7 +291,7 @@ export function createAmbient() {
     storms = [];
     const n = 3, top = v.camY + v.vh * .06;
     for (let i = 0; i < n; i++) {
-      const w = rnd(60, 96), x = v.x0 - 20 + (i + rnd(.1, .7)) * (v.vw + 40) / n - w / 2;
+      const w = rnd(70, 110), x = v.x0 - 20 + (i + rnd(.1, .7)) * (v.vw + 40) / n - w / 2;
       const y = clamp(top + rnd(10, v.vh * .26), 1380, 2120);
       storms.push({ x, y, w, img: cloudSprite((R() * 1e9) | 0, Math.round(w * s), CLOUD_PAL.storm, 'storm'), a: 0 });
     }
@@ -298,7 +301,7 @@ export function createAmbient() {
     const fade = wx.rain;
     for (const c of storms) {
       c.x += (2 + wind.v * .25) * v.dt; c.a = fade;
-      c.y = clamp(c.y + v.dcw * .75, 1380, 2120);   // far away: they keep up with a climbing camera, mostly
+      if (Math.abs(v.dcw) < 40) c.y = clamp(c.y + v.dcw * .75, 1380, 2120);   // far away: they keep up with a climbing camera, mostly (not with a jump)
       if (c.a <= .01) continue;
       const h = c.img.height / s;
       // rain falls from the cloud's belly
