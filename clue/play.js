@@ -145,7 +145,7 @@ async function connect() {
   history.replaceState(null, '', location.pathname + '?code=' + code);
   game.on('wait', onWait); game.on('q', onQ); game.on('got', onGot); game.on('res', onRes); game.on('end', onEnd);
   game.on('kicked', () => { game.close(); game = null; lost('The teacher removed you from this game.', true); });
-  game.onLost(() => { game = null; lost('The connection to the game was lost.'); });
+  game.onLost(() => { game = null; lost('Lost the connection. Joining again…'); setTimeout(connect, 700); });
   route(game.first);
 }
 function route(m) { if (!m) return; ({ wait: onWait, q: onQ, res: onRes, end: onEnd }[m.type] || onWait)(m); }
@@ -155,6 +155,8 @@ function lost(msg, kicked) {
   show('lost');
 }
 $('#rejoin').onclick = () => { unlock(); connect(); };
+// back from a locked screen or another app: if the link dropped meanwhile, join again straight away
+document.addEventListener('visibilitychange', () => { if (!document.hidden && document.body.dataset.screen === 'lost' && !$('#rejoin').hidden && !joining) connect(); });
 $('#newCode').onclick = () => { codeIn.value = ''; drawDigits(); $('#joinErr').textContent = ''; show('join'); };
 
 // ---------- the rounds ----------
