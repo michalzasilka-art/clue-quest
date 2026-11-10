@@ -7,11 +7,11 @@
 // snow falls near the ground, stars twinkle and shoot, the aurora waves.
 // phoneWorld() draws the same village and sky behind a phone.
 
-// The map: one painted picture 960 × 7250 px (five ChatGPT sky pictures and the snowy forest clearing, cross-faded;
-// built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 3 px per world unit.
+// The map: one painted picture 640 × 4834 px (five ChatGPT sky pictures and the snowy forest clearing, cross-faded;
+// built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 2 px per world unit.
 // 0 m at the forest floor up to 1500 m at the North Star.
 export const W = 320, VH = 180, WH = 2417;
-const MAP = { slices: 7, slicePx: 1200, heightPx: 7250, pxPerUnit: 3 };
+const MAP = { slices: 7, slicePx: 800, heightPx: 4834, pxPerUnit: 2 };
 const O = WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
 export const GROUND = WH - 20;       // where the heroes stand in the village
 export const TOPY = 56;              // the North Star in the painted sky: the top of the flight (1500 m)
@@ -170,11 +170,13 @@ function scene(canvas, { viewW, phone }) {
   slices.forEach((_, i) => { const im = new Image(); im.onload = () => { slices[i] = im; painted = slices.every(Boolean); }; im.src = new URL(`art/map-${i}.webp`, import.meta.url).href; });
   const SLEIGH_Y = 640, PLANE_Y = 1010;   // in the aurora picture / over the cloud sea
   function fit() {
-    // pixel art: a smaller canvas shown big with crisp pixels, about 2.4 device pixels per art pixel (fine, like
-    // a detailed pixel-art game). Landscape screens see the whole 320-wide world, portrait phones the middle 190.
+    // pixel art with big crisp pixels like a classic pixel-art game: the canvas has 2 pixels per world unit on big
+    // screens (the painted map's own grain, drawn 1:1) and 1 on phones, and the browser scales it up with hard
+    // edges, so every art pixel is a 2–3 screen-pixel square. Landscape screens see the whole 320-wide world,
+    // portrait phones the middle 190.
     const cssW = canvas.clientWidth || 960, cssH = canvas.clientHeight || 540;
     vw = viewW || (cssW > cssH * 1.1 ? W : 190);
-    const px = Math.max(1.2, Math.min(4, cssW * (devicePixelRatio || 1) / 2.4 / vw));
+    const px = cssW / vw >= 3.5 ? 2 : 1;
     const cw = Math.round(vw * px), ch = Math.round(cw * cssH / cssW);
     canvas.width = cw; canvas.height = ch; g.imageSmoothingEnabled = false;
     s = px; vh = ch / s;
@@ -196,7 +198,7 @@ function scene(canvas, { viewW, phone }) {
     g.fillStyle = sk; g.fillRect(0, 0, cw, ch);
     const vis = (y, m = 40) => y > camY - m && y < camY + vh + m;
     if (painted) {
-      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+      g.imageSmoothingEnabled = s < MAP.pxPerUnit; g.imageSmoothingQuality = 'high';   // 1:1 on big screens, averaged down on phones
       slices.forEach((im, i) => {
         const top = i * MAP.slicePx / MAP.pxPerUnit, h = im.height / MAP.pxPerUnit;
         if (top < camY + vh && top + h > camY) g.drawImage(im, Math.round(X(0)), Math.round(Y(top)), Math.round(W * s), Math.round(h * s) + 1);

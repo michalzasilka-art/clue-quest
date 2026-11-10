@@ -112,7 +112,7 @@ function drawFlyer(which, s = streak) {
 
 // the painted heroes: redraw what is on screen once they have loaded, and let the big hero on each screen animate
 artReady.then(() => { drawPicks(); for (const w of ['pick', 'waiting', 'result', 'final']) drawFlyer(w); $$('.join-crew img').forEach((im, i) => { im.src = heroURL(HEROES[i].id, { hat: HATS[(i % (HATS.length - 1)) + 1].id }); }); });
-setInterval(() => { const t = performance.now(); for (const f of $$('.flyer')) if (f.offsetParent) { const im = f.querySelector('.fhero'), src = heroURL(me.char, { hat: me.hat, frame: heroFrame(t, 1, f.classList.contains('up')), scale: 6 }); if (im.getAttribute('src') !== src) im.src = src; } }, 120);
+setInterval(() => { const t = performance.now(); for (const f of $$('.flyer')) if (f.offsetParent) { const im = f.querySelector('.fhero'), src = heroURL(me.char, { hat: me.hat, frame: heroFrame(t, 1, f.classList.contains('up') ? 'cheer' : f.classList.contains('wobble') ? 'sad' : 'idle'), scale: 6 }); if (im.getAttribute('src') !== src) im.src = src; } }, 120);
 
 // ---------- code ----------
 const codeIn = $('#codeIn');
@@ -153,7 +153,7 @@ $('#meGo').onclick = async () => {
   const n = $('#nameIn').value.replace(/\s+/g, ' ').trim();
   if (!n) { $('#meErr').textContent = 'Type your name first.'; $('#nameIn').focus(); return; }
   me.name = n.slice(0, 14); save(); sfx.tap();
-  if (soloMode) { import('./solo.js?v=8').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
+  if (soloMode) { import('./solo.js?v=9').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
   if (editing && game) { game.send({ type: 'look', name: me.name, char: me.char, hat: me.hat }); drawWait(); show('wait'); return; }
   connect();
 };
@@ -271,7 +271,8 @@ function openMenu() {
 $('#menuGo').onclick = () => {
   unlock(); sfx.tap();
   if (mode === 'board') { location.href = new URL('./?host', location.href).href; return; }
-  soloMode = true; openMe(false);
+  // Individual: its own lobby (hero, hat, name, topic) in solo.js
+  import('./solo.js?v=9').then((m) => m.startSolo(cam, me, () => openMenu(), save));
 };
 $('#menuJoin').onclick = () => { unlock(); sfx.tap(); soloMode = false; codeIn.value = ''; drawDigits(); show('join'); };
 

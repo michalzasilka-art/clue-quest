@@ -1,185 +1,237 @@
-// Clue Quest, Individual: one player on one screen (a phone or a computer), racing three computer flyers up the
-// map. Pick a topic → each clue: read it, tap one of 3 words → the answer flashes → everyone flies up by what they
-// earned → the next clue comes by itself → after 10 clues, the podium and your best height (kept on this device).
-import { $, $$, esc, store, show, shuffle, confetti, ordinal } from './ui.js';
-import { HEROES, HATS, heroURL, heroFrame, balloonsURL } from './sprites.js';
+// Clue Quest, Individual: one player alone on one screen (a phone or a computer). A lobby in the snowy forest where
+// your hero hangs from its balloons (switch hero and hat, type your name, pick a topic), then 10 clues: the clue sits
+// in a box right next to your hero, you tap one of 3 words at the bottom, the result floats up, your hero cheers or
+// droops and climbs, and the next clue comes by itself. The camera follows you up the painted map to 1500 m; at the
+// end you get a title for how high you flew and your best height is kept on this device.
+import { $, $$, esc, store, show, shuffle, confetti } from './ui.js';
+import { HEROES, HATS, heroURL, heroFrame, hatURL, balloonsURL } from './sprites.js';
 import { SETS } from './words.js';
-import { W, WH, GROUND, TOPY, zoneAt } from './world.js';
+import { W, WH, GROUND, TOPY, ZONES, zoneAt } from './world.js';
 import { sfx, unlock } from './sound.js';
 
 const LETTERS = ['a', 'b', 'c'];
 const ROUNDS = 10, SECS = 20, TOP_ALT = 1500, CLIMB = 15 / ROUNDS;
-const RIVAL_NAMES = ['Rusty', 'Miso', 'Bolt', 'Zara', 'Pip', 'Luna', 'Boo', 'Kiki', 'Max', 'Tomi'];
 const altY = (alt) => GROUND - Math.min(1, alt / TOP_ALT) * (GROUND - TOPY);
 const r5 = (m) => Math.round(m / 5) * 5;
 const gainFor = (t) => r5((50 + 50 * Math.max(0, 1 - t / (SECS * 1000))) * CLIMB);
 const streakBonus = (s) => (s >= 2 ? r5(10 * (Math.min(s, 5) - 1) * CLIMB) : 0);
+const TITLES = [[1500, 'NORTH STAR HERO'], [1200, 'STAR CHASER'], [900, 'AURORA RIDER'], [600, 'CLOUD SURFER'], [300, 'PEAK EXPLORER'], [0, 'TREETOP FLYER']];
+const titleFor = (alt) => TITLES.find(([m]) => alt >= m)[1];
 
-let built = false, cam = null, me = null, onExit = null;
-let fly = [], rounds = [], qi = 0, qStart = 0, timer = null, picked = null, phase = 'off', topic = SETS[0], raf = 0;
+let built = false, cam = null, me = null, onExit = null, saveMe = null;
+let rounds = [], qi = 0, qStart = 0, timer = null, phase = 'off', topic = SETS[0], raf = 0;
+const P = { alt: 0, shown: 0, from: 0, streak: 0, best: 0, right: 0, gain: 0, mood: 'idle', moodUntil: 0, zone: '' };
 
 function build() {
   if (built) return; built = true;
   $('#app').insertAdjacentHTML('beforeend', `
-<section class="screen" id="soloTopic" hidden><div class="col">
-  <div class="logo small">CLUE<br><i>QUEST</i></div>
-  <div class="card px"><h2>PICK A TOPIC</h2><div class="topics" id="soloTopics"></div>
-  <button class="btn px green" id="soloGo">START FLYING</button>
-  <button class="btn px ghost" id="soloBack" style="margin-top:14px">BACK</button></div>
-</div></section>
-<section class="screen solo-game" id="soloGame" hidden>
-  <div class="solo-hud"><div class="px" id="soloNum">CLUE 1/10</div><div class="tbar"><i id="soloBar"></i></div><div class="px" id="soloAlt">0 m</div></div>
-  <div class="solo-panel">
-    <div class="px solo-clue" id="soloClue"><small id="soloLbl">WHAT IS IT?</small><span id="soloText"></span></div>
-    <div class="pans" id="soloAns"></div>
+<section class="screen solo-lobby" id="soloLobby" hidden>
+  <div class="sl-top"><div class="logo small">CLUE <i>QUEST</i></div><div class="tagline">THE BALLOON CLIMB</div></div>
+  <div class="sl-stage">
+    <button class="sl-arrow" id="slPrev" aria-label="Previous hero">◀</button>
+    <div class="sl-hero"><img class="px-img sl-bal" id="slBal" alt=""><img class="px-img sl-img" id="slHero" alt=""><div class="sl-shadow"></div></div>
+    <button class="sl-arrow" id="slNext" aria-label="Next hero">▶</button>
   </div>
+  <div class="sl-name"><b id="slHeroName">FOXINO</b><small id="slHeroTag"></small></div>
+  <div class="sl-panel">
+    <div class="sl-hats" id="slHats"></div>
+    <input class="sl-input" id="slName" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="YOUR NAME">
+    <div class="sl-topics" id="slTopics"></div>
+    <p class="err" id="slErr"></p>
+    <button class="btn px green" id="soloGo">BEGIN CLIMB</button>
+    <div class="sl-row"><button class="btn px ghost" id="soloBack">MENU</button><div class="sl-best px" id="slBest"></div></div>
+  </div>
+</section>
+<section class="screen solo-game" id="soloGame" hidden>
+  <div class="solo-hud"><div class="px" id="soloNum">CLUE 1/10</div><div class="px sg-streak" id="soloStreak" hidden></div><div class="px" id="soloAlt">0 m</div></div>
+  <div class="sg-clue px" id="soloClue"><small id="soloLbl">WHAT IS IT?</small><span id="soloText"></span></div>
+  <div class="sg-result" id="soloResult" hidden><b id="srTitle"></b><span id="srWord"></span><i id="srPts"></i></div>
+  <div class="sg-bottom"><div class="sg-timer" id="soloTimer"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="tt"></circle><circle cx="18" cy="18" r="15" class="tf" id="soloRing"></circle></svg><span id="soloSecs">20</span></div><div class="pans" id="soloAns"></div></div>
   <div class="solo-banner" id="soloBanner" hidden></div>
 </section>
-<section class="screen" id="soloEnd" hidden><div class="col">
+<section class="screen solo-end" id="soloEnd" hidden><div class="col">
   <div class="spacer"></div>
-  <div class="verdict pop" id="soloTitle">YOU WON!</div>
-  <div class="solo-podium" id="soloPodium"></div>
-  <div class="stats"><div class="px"><span class="tag">HEIGHT</span><b id="soloEndAlt">0 m</b></div><div class="px"><span class="tag">BEST</span><b id="soloBest">0 m</b></div></div>
-  <p class="hint" id="soloZone"></p>
-  <button class="btn px green" id="soloAgain">FLY AGAIN</button>
-  <button class="btn px ghost" id="soloMenu">MENU</button>
+  <div class="se-label">YOU FLEW TO</div>
+  <div class="se-height" id="seHeight">0 m</div>
+  <div class="se-title" id="seTitle">TREETOP FLYER</div>
+  <div class="se-hero"><img class="px-img" id="seBal" alt=""><img class="px-img" id="seHero" alt=""></div>
+  <div class="stats"><div class="px"><span class="tag">RIGHT</span><b id="seRight">0/10</b></div><div class="px"><span class="tag">BEST</span><b id="seBest">0 m</b></div></div>
+  <p class="hint" id="seZone"></p>
+  <button class="btn px green" id="soloAgain">CLIMB AGAIN</button>
+  <button class="btn px ghost" id="soloMenu">LOBBY</button>
   <div class="spacer"></div>
 </div></section>`);
-  document.body.insertAdjacentHTML('beforeend', '<div id="soloLayer" hidden><div id="soloTokens"></div><div id="soloRuler"><div class="rail"></div><div id="soloHeads"></div></div></div>');
-  $('#soloTopics').innerHTML = SETS.map((s) => `<button class="topic-b px" data-id="${s.id}"><img class="px-img" src="${heroURL(s.icon, { hat: s.hat })}" alt=""><span><b>${esc(s.title)}</b><small>${s.level}</small></span></button>`).join('');
-  $('#soloTopics').addEventListener('click', (e) => { const b = e.target.closest('.topic-b'); if (!b) return; sfx.pick(); topic = SETS.find((s) => s.id === b.dataset.id); store.set('clue-solo-topic', topic.id); drawTopics(); });
-  $('#soloGo').onclick = () => { unlock(); sfx.fly(); begin(); };
-  $('#soloBack').onclick = () => { sfx.tap(); stop(); onExit && onExit('me'); };
+  document.body.insertAdjacentHTML('beforeend', `<div id="soloLayer" hidden>
+  <div id="soloMe" class="tok mine"><span class="tag"></span><img class="px-img bal" alt=""><img class="px-img hero" alt=""><b class="gain"></b></div>
+  <div id="soloRuler"><div class="rail"></div><div id="soloTicks"></div><div id="soloMark"><img class="px-img" alt=""><span></span></div></div></div>`);
+  $('#soloTicks').innerHTML = [0, 250, 500, 750, 1000, 1250, 1500].map((m) => `<div class="tick" style="top:${(altY(m) / WH * 100).toFixed(2)}%"><span>${m === 1500 ? '★' : m}</span></div>`).join('');
+  // lobby controls
+  $('#slPrev').onclick = () => stepHero(-1);
+  $('#slNext').onclick = () => stepHero(1);
+  $('#slHats').addEventListener('click', (e) => { const b = e.target.closest('.sl-hat'); if (!b) return; unlock(); sfx.pop(); me.hat = b.dataset.id; drawLobby(true); });
+  $('#slTopics').addEventListener('click', (e) => { const b = e.target.closest('.sl-topic'); if (!b) return; unlock(); sfx.pick(); topic = SETS.find((s) => s.id === b.dataset.id); store.set('clue-solo-topic', topic.id); drawLobby(); });
+  $('#slName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#slName').blur(); });
+  $('#soloGo').onclick = () => {
+    unlock();
+    const n = $('#slName').value.replace(/\s+/g, ' ').trim();
+    if (!n) { $('#slErr').textContent = 'Type your name first.'; $('#slName').focus(); return; }
+    me.name = n.slice(0, 14); saveMe && saveMe(); $('#slErr').textContent = '';
+    sfx.fly(); begin();
+  };
+  $('#soloBack').onclick = () => { sfx.tap(); stop(); onExit && onExit('menu'); };
   $('#soloAns').addEventListener('click', (e) => { const b = e.target.closest('.pbtn'); if (b) choose(+b.dataset.k); });
-  addEventListener('keydown', (e) => { if (phase === 'q' && ['1', '2', '3'].includes(e.key)) choose(+e.key - 1); });
+  addEventListener('keydown', (e) => {
+    if (phase === 'q' && ['1', '2', '3'].includes(e.key)) choose(+e.key - 1);
+    if (phase === 'lobby' && e.key === 'ArrowLeft') stepHero(-1);
+    if (phase === 'lobby' && e.key === 'ArrowRight') stepHero(1);
+  });
   $('#soloAgain').onclick = () => { unlock(); sfx.tap(); begin(); };
-  $('#soloMenu').onclick = () => { sfx.tap(); stop(); onExit && onExit('menu'); };
-}
-function drawTopics() { $$('#soloTopics .topic-b').forEach((b) => b.classList.toggle('on', b.dataset.id === topic.id)); }
-
-// the entry point: after the player picked hero, hat and name
-export function startSolo(world, player, exit) {
-  cam = world; me = player; onExit = exit; build();
-  topic = SETS.find((s) => s.id === store.get('clue-solo-topic')) || SETS[0];
-  drawTopics(); show('soloTopic');
-}
-function stop() { phase = 'off'; clearTimeout(timer); cancelAnimationFrame(raf); $('#soloLayer').hidden = true; cam.rest(); }
-
-function begin() {
-  const words = shuffle(topic.words).slice(0, ROUNDS);
-  rounds = words.map(([word, desc, w1, w2]) => { const opts = shuffle([word, w1, w2]); return { word, desc, opts, right: opts.indexOf(word) }; });
-  // three rivals with other heroes and hats, each a little different in skill and speed
-  const others = shuffle(HEROES.filter((h) => h.id !== me.char)).slice(0, 3), names = shuffle(RIVAL_NAMES);
-  fly = [{ me: true, name: me.name, char: me.char, hat: me.hat, x: 160 }].concat(others.map((h, i) => ({
-    name: names[i], char: h.id, hat: HATS[1 + Math.floor(Math.random() * (HATS.length - 1))].id, x: [92, 228, 124][i],
-    skill: [.55, .7, .82][i], speed: [9000, 6500, 4500][i],
-  })));
-  for (const f of fly) Object.assign(f, { alt: 0, shown: 0, streak: 0, best: 0, el: null });
-  $('#soloTokens').innerHTML = '';
-  for (const [i, f] of fly.entries()) {
-    const el = document.createElement('div'); el.className = 'tok pop' + (f.me ? ' mine' : '');
-    el.innerHTML = '<span class="tag"></span><img class="px-img bal" alt=""><img class="px-img hero" alt=""><b class="gain"></b>';
-    el.style.setProperty('--d', (-i * .7) + 's');
-    $('#soloTokens').appendChild(el); f.el = el; drawTok(f);
-  }
-  $('#soloLayer').hidden = false; qi = 0; show('soloGame');
+  $('#soloMenu').onclick = () => { sfx.tap(); openLobby(); };
   cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
-  cam.look(altY(0) - cam.viewH * .8, true);
-  setTimeout(() => ask(0), 600);
 }
-function drawTok(f) {
-  f.el.querySelector('.tag').textContent = f.me ? f.name + ' (YOU)' : f.name;
-  f.el.querySelector('.bal').src = balloonsURL(3 + Math.min(3, f.streak), f.streak >= 3, f.x | 0);
-  f.el.classList.toggle('hot', f.streak >= 3);
+function stepHero(d) {
+  unlock(); sfx.pick();
+  const i = HEROES.findIndex((h) => h.id === me.char);
+  me.char = HEROES[(i + d + HEROES.length) % HEROES.length].id;
+  saveMe && saveMe(); drawLobby(true);
 }
-// every frame: place the flyers over the world and follow the player with the camera
+function drawLobby(bounce) {
+  const h = HEROES.find((x) => x.id === me.char) || HEROES[0];
+  $('#slHeroName').textContent = h.name.toUpperCase();
+  $('#slHeroTag').textContent = h.ours ? '★ FOXINO CREW' : 'WINTER FRIEND';
+  $('#slBal').src = balloonsURL(3, false, 2, 6);
+  $('#slHats').innerHTML = HATS.map((t) => `<button class="sl-hat${t.id === me.hat ? ' on' : ''}" data-id="${t.id}" title="${esc(t.name)}"><img class="px-img" src="${hatURL(t.id)}" alt="${esc(t.name)}"></button>`).join('');
+  $('#slTopics').innerHTML = SETS.map((s) => `<button class="sl-topic${s.id === topic.id ? ' on' : ''}" data-id="${s.id}">${esc(s.title)}</button>`).join('');
+  const on = $('#slTopics .on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
+  const best = store.get('clue-best', 0);
+  $('#slBest').textContent = best ? `BEST ${best} m · ${titleFor(best)}` : 'NORTH STAR AT 1500 m';
+  if (bounce) { const s = $('.sl-hero'); s.classList.remove('boing'); void s.offsetWidth; s.classList.add('boing'); }
+}
+
+// ---------- the entry point (from the start menu) ----------
+export function startSolo(world, player, exit, save) {
+  cam = world; me = player; onExit = exit; saveMe = save; build();
+  topic = SETS.find((s) => s.id === store.get('clue-solo-topic')) || SETS[0];
+  openLobby();
+}
+function openLobby() {
+  stop(); phase = 'lobby';
+  $('#slName').value = me.name || '';
+  drawLobby(); show('soloLobby');
+}
+function stop() { clearTimeout(timer); $('#soloLayer').hidden = true; cam.rest(); if (phase !== 'lobby') phase = 'off'; }
+
+// ---------- the climb ----------
+function begin() {
+  rounds = shuffle(topic.words).slice(0, ROUNDS).map(([word, desc, w1, w2]) => { const opts = shuffle([word, w1, w2]); return { word, desc, opts, right: opts.indexOf(word) }; });
+  Object.assign(P, { alt: 0, shown: 0, from: 0, streak: 0, best: 0, right: 0, gain: 0, mood: 'idle', moodUntil: 0, zone: ZONES[0][0] });
+  $('#soloMe .tag').textContent = me.name;
+  $('#soloMark img').src = heroURL(me.char, { hat: me.hat });
+  drawBalloons();
+  $('#soloLayer').hidden = false; $('#soloStreak').hidden = true;
+  show('soloGame'); phase = 'intro';
+  cam.look(altY(0) - cam.viewH * .95, true);
+  setTimeout(() => ask(0), 700);
+}
+function drawBalloons() { $('#soloMe .bal').src = balloonsURL(3 + Math.min(3, P.streak), P.streak >= 3, 2); $('#soloMe').classList.toggle('hot', P.streak >= 3); }
+
+// every frame: your hero hangs a little left of centre, the clue box beside it; the camera follows you up
 function loop(t) {
   raf = requestAnimationFrame(loop);
-  const vw = cam.viewW, vh = cam.viewH, x0 = (W - vw) / 2, cy = cam.y;
-  const mine = fly.find((f) => f.me), hover = vh * .5;   // everyone hangs half a screen above the ground line, clear of the answer panel
-  if (phase !== 'off') cam.look(altY(mine.shown) - hover - vh * .4);
-  fly.forEach((f, i) => {
-    const x = f.x + 3 * Math.sin(t / 2300 + i * 1.7), y = altY(f.shown) - hover - 3 * Math.sin(t / 900 + i * 2.3) - (f.me ? 0 : 8 * (i % 2));
-    const hs = heroURL(f.char, { hat: f.hat, frame: heroFrame(t, i, f.el.classList.contains('rise')) });
-    if (f.src !== hs) { f.el.querySelector('.hero').src = hs; f.src = hs; }
-    f.el.style.left = ((x - x0) / vw * 100).toFixed(2) + '%';
-    f.el.style.top = ((y - cy) / vh * 100).toFixed(2) + '%';
-    f.el.style.zIndex = f.me ? 50 : 10 + i;
-  });
-  $('#soloHeads').innerHTML = fly.map((f) => `<img class="px-img rh${f.me ? ' lead' : ''}" style="top:${(altY(f.shown) / WH * 100).toFixed(2)}%" src="${heroURL(f.char, { hat: f.hat })}" alt="">`).join('');
+  if (phase === 'lobby') {
+    const im = $('#slHero'), src = heroURL(me.char, { hat: me.hat, frame: heroFrame(t, 0, 'idle'), scale: 6 });
+    if (im.getAttribute('src') !== src) im.src = src;
+    return;
+  }
+  if (phase === 'off' || phase === 'end') return;
+  const vw = cam.viewW, vh = cam.viewH, x0 = (W - vw) / 2, wide = innerWidth > innerHeight * 1.1;
+  const hover = vh * .62;                                   // you hang this far above your height line, clear of the answers
+  const y = altY(P.shown) - hover - 4 * Math.sin(t / 1000);
+  cam.look(altY(P.shown) - hover - vh * (wide ? .64 : .5));   // feet half-way down a phone, lower on a wide screen so the balloons clear the top bar
+  const sx = wide ? 26 : 22, el = $('#soloMe');
+  el.style.left = (sx + 1.5 * Math.sin(t / 2300)) + '%';
+  el.style.top = ((y - cam.y) / vh * 100).toFixed(2) + '%';
+  const mood = t < P.moodUntil ? P.mood : (phase === 'climb' ? 'rise' : 'idle');
+  const src = heroURL(me.char, { hat: me.hat, frame: heroFrame(t, 3, mood) });
+  if (el.dataset.src !== src) { el.querySelector('.hero').src = src; el.dataset.src = src; }
+  $('#soloMark').style.top = (altY(P.shown) / WH * 100).toFixed(2) + '%';
+  $('#soloMark span').textContent = P.shown + ' m';
 }
 
 function ask(i) {
-  qi = i; picked = null; phase = 'q';
+  qi = i; phase = 'q';
   const r = rounds[i];
   $('#soloNum').textContent = `CLUE ${i + 1}/${ROUNDS}`;
-  $('#soloAlt').textContent = fly[0].alt + ' m';
   $('#soloLbl').textContent = 'WHAT IS IT?';
   $('#soloText').textContent = r.desc;
-  $('#soloAns').innerHTML = r.opts.map((o, k) => `<button class="pbtn px opt-${LETTERS[k]} pop" style="animation-delay:${k * .08}s" data-k="${k}"><span class="shape"></span><span>${esc(o)}</span></button>`).join('');
-  $('#soloClue').classList.remove('pop'); void $('#soloClue').offsetWidth; $('#soloClue').classList.add('pop');
-  qStart = performance.now(); sfx.start();
-  // the rivals answer in their own time
-  for (const f of fly) if (!f.me) {
-    f.t = Math.min(SECS * 1000 - 500, f.speed * (.5 + Math.random()));
-    f.ok = Math.random() < f.skill;
-  }
-  tick();
+  $('#soloResult').hidden = true;
+  $('#soloAns').innerHTML = r.opts.map((o, k) => `<button class="pbtn px opt-${LETTERS[k]} pop" style="animation-delay:${.1 + k * .08}s" data-k="${k}"><span class="shape"></span><span>${esc(o)}</span></button>`).join('');
+  const c = $('#soloClue'); c.hidden = false; c.classList.remove('slidein'); void c.offsetWidth; c.classList.add('slidein');
+  qStart = performance.now(); sfx.start(); tick();
 }
 function tick() {
   clearTimeout(timer);
   if (phase !== 'q') return;
-  const left = Math.max(0, SECS * 1000 - (performance.now() - qStart)), f = left / (SECS * 1000);
-  $('#soloBar').style.width = (Math.round(f * 40) * 2.5) + '%'; $('#soloBar').classList.toggle('low', f < .25);
+  const left = Math.max(0, SECS * 1000 - (performance.now() - qStart)), f = left / (SECS * 1000), s = Math.ceil(left / 1000);
+  $('#soloSecs').textContent = s;
+  $('#soloRing').style.strokeDashoffset = (94.25 * (1 - f)).toFixed(1);
+  $('#soloTimer').classList.toggle('low', s <= 5);
   if (left <= 0) { choose(-1); return; }
   timer = setTimeout(tick, 100);
 }
 function choose(k) {
-  if (phase !== 'q' || picked != null) return;
-  picked = k; phase = 'reveal'; clearTimeout(timer);
+  if (phase !== 'q') return;
+  phase = 'reveal'; clearTimeout(timer);
   const r = rounds[qi], t = performance.now() - qStart, ok = k === r.right;
   $$('#soloAns .pbtn').forEach((b, j) => { b.disabled = true; b.classList.toggle('right', j === r.right); b.classList.toggle('wrongpick', j === k && !ok); b.classList.toggle('faded', j !== r.right && j !== k); });
-  $('#soloLbl').textContent = ok ? 'RIGHT!' : k < 0 ? 'TIME IS UP!' : 'OOPS! IT WAS…';
-  if (ok) { sfx.right(); } else sfx.wrong();
-  // everyone's climb this round
-  for (const f of fly) {
-    const right = f.me ? ok : f.ok, time = f.me ? t : f.t;
-    if (right) { f.streak++; f.best = Math.max(f.best, f.streak); f.gainNow = gainFor(time) + streakBonus(f.streak); }
-    else { f.streak = 0; f.gainNow = 0; }
-    f.from = f.alt; f.alt += f.gainNow;
-  }
-  const mine = fly[0];
-  banner(ok ? `+${mine.gainNow} m${mine.streak >= 2 ? ' · STREAK ×' + mine.streak : ''}` : 'NO CLIMB THIS TIME');
+  if (ok) { P.streak++; P.best = Math.max(P.best, P.streak); P.right++; const bonus = streakBonus(P.streak); P.gain = gainFor(t) + bonus; P.bonus = bonus; }
+  else { P.streak = 0; P.gain = 0; P.bonus = 0; }
+  P.from = P.alt; P.alt += P.gain;
+  P.mood = ok ? 'cheer' : 'sad'; P.moodUntil = performance.now() + 1500;
+  // the result floats up between the clue and the answers
+  $('#srTitle').textContent = ok ? (P.streak >= 3 ? 'ON FIRE!' : 'RIGHT!') : k < 0 ? 'TIME IS UP!' : 'OOPS!';
+  $('#srTitle').className = ok ? 'ok' : 'no';
+  $('#srWord').textContent = ok ? r.word : `IT WAS: ${r.word}`;
+  $('#srPts').textContent = ok ? `+${P.gain} m${P.bonus ? ` · STREAK ×${P.streak} +${P.bonus} m` : ''}` : 'NO CLIMB THIS TIME';
+  const res = $('#soloResult'); res.hidden = false; res.classList.remove('floatup'); void res.offsetWidth; res.classList.add('floatup');
+  $('#soloClue').hidden = true;
+  $('#soloStreak').hidden = P.streak < 2; $('#soloStreak').textContent = `STREAK ×${P.streak}`;
+  if (ok) sfx.right(); else sfx.wrong();
   setTimeout(climb, 1300);
 }
 function climb() {
-  phase = 'fly'; sfx.fly();
-  for (const f of fly) { drawTok(f); const g = f.el.querySelector('.gain'); g.textContent = f.gainNow ? `+${f.gainNow} m` : ''; f.el.classList.toggle('rise', f.gainNow > 0); }
-  const t0 = performance.now(), D = 2000;
+  phase = 'climb';
+  drawBalloons();
+  const el = $('#soloMe'), g = el.querySelector('.gain');
+  g.textContent = P.gain ? `+${P.gain} m` : '';
+  el.classList.toggle('rise', P.gain > 0);
+  if (P.gain) sfx.fly();
+  const t0 = performance.now(), D = P.gain ? 2100 : 500;
   const step = (t) => {
     const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3);
-    for (const f of fly) f.shown = Math.round(f.from + (f.alt - f.from) * e);
-    $('#soloAlt').textContent = fly[0].shown + ' m';
-    if (k < 1) requestAnimationFrame(step);
-    else {
-      for (const f of fly) f.el.classList.remove('rise');
-      if (qi + 1 < ROUNDS) setTimeout(() => ask(qi + 1), 500); else setTimeout(finish, 800);
-    }
+    P.shown = Math.round(P.from + (P.alt - P.from) * e);
+    $('#soloAlt').textContent = P.shown + ' m';
+    if (k < 1) { requestAnimationFrame(step); return; }
+    el.classList.remove('rise');
+    const z = zoneAt(altY(P.alt) - 40);
+    if (z !== P.zone) { P.zone = z; banner(`WELCOME TO THE ${z.toUpperCase()}`); }
+    if (qi + 1 < ROUNDS) setTimeout(() => ask(qi + 1), 700); else setTimeout(finish, 900);
   };
   requestAnimationFrame(step);
 }
-function banner(text) { const b = $('#soloBanner'); b.textContent = text; b.hidden = false; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); setTimeout(() => { b.hidden = true; }, 1800); }
+function banner(text) { const b = $('#soloBanner'); b.textContent = text; b.hidden = false; b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); sfx.reveal(); setTimeout(() => { b.hidden = true; }, 2200); }
 
 function finish() {
   phase = 'end';
-  const ranked = fly.slice().sort((a, b) => b.alt - a.alt), place = 1 + ranked.filter((f) => f.alt > fly[0].alt).length;
-  const best = Math.max(store.get('clue-best', 0), fly[0].alt); store.set('clue-best', best);
-  $('#soloTitle').textContent = place === 1 ? 'YOU WON!' : place <= 3 ? `${ordinal(place).toUpperCase()} PLACE!` : 'GOOD FLIGHT!';
-  $('#soloTitle').className = 'verdict pop' + (place <= 3 ? ' ok' : '');
-  $('#soloPodium').innerHTML = ranked.map((f, i) => `<div class="sp-row${f.me ? ' me' : ''}"><span class="pl">${i + 1}</span><img class="px-img" src="${heroURL(f.char, { hat: f.hat })}" alt=""><span class="nm">${esc(f.name)}${f.me ? ' (YOU)' : ''}</span><b>${f.alt} m</b></div>`).join('');
-  $('#soloEndAlt').textContent = fly[0].alt + ' m'; $('#soloBest').textContent = best + ' m';
-  $('#soloZone').textContent = `You flew up to the ${zoneAt(altY(fly[0].alt))}.` + (fly[0].alt >= TOP_ALT ? ' You reached the North Star!' : '');
+  const best = Math.max(store.get('clue-best', 0), P.alt), newBest = P.alt > store.get('clue-best', 0); store.set('clue-best', best);
+  $('#seHeight').textContent = P.alt + ' m';
+  $('#seTitle').textContent = titleFor(P.alt);
+  $('#seHero').src = heroURL(me.char, { hat: me.hat, frame: P.alt ? 3 : 0, scale: 6 });
+  $('#seBal').src = balloonsURL(3 + Math.min(3, P.best), P.best >= 3, 2, 6);
+  $('#seRight').textContent = `${P.right}/${ROUNDS}`;
+  $('#seBest').textContent = best + ' m';
+  $('#seZone').textContent = P.alt >= TOP_ALT ? 'You reached the North Star!' : `You flew up to the ${zoneAt(altY(P.alt))}.` + (newBest ? ' A new best!' : '');
   $('#soloLayer').hidden = true;
   show('soloEnd');
-  if (place === 1) { sfx.fanfare(); confetti(4000); } else sfx.right();
+  if (newBest || P.alt >= TOP_ALT) { sfx.fanfare(); confetti(4000); } else sfx.right();
 }

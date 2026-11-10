@@ -251,7 +251,8 @@ cam.onFrame((camY, t) => {
       x = laneX(p.lane) + 1.6 * Math.sin(t / 2300 + p.lane * 1.7);
       y = altY(p.shown) - 6 - (p.lane % 3) * 13 - 3 * Math.sin(t / 900 + p.lane * 2.3);
     }
-    const fr = heroFrame(t, p.lane, phase === 'fly' && tk.el.classList.contains('rise')), hs = heroURL(p.char, { hat: p.hat, frame: fr });
+    const mood = phase === 'fly' && tk.el.classList.contains('rise') ? 'rise' : phase === 'results' && p.last ? (p.last.ok ? 'cheer' : p.last.none ? 'idle' : 'sad') : 'idle';
+    const fr = heroFrame(t, p.lane, mood), hs = heroURL(p.char, { hat: p.hat, frame: fr });
     if (tk.src !== hs) { tk.hero.src = hs; tk.src = hs; }   // the hero animates: swinging legs, a blink, a cheer while climbing
     tk.el.style.left = x + '%';
     tk.el.style.top = ((y - camY) / VH * 100).toFixed(2) + '%';

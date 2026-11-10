@@ -351,12 +351,12 @@ const artCache = new Map();
 export const artReady = (async () => {
   try {
     const base = new URL('art/heroes/', import.meta.url);
-    const meta = await (await fetch(new URL('sprites.json?v=1', base))).json();
+    const meta = await (await fetch(new URL('sprites.json?v=2', base))).json();
     const load = (src) => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = src; });
     const ids = Object.keys(meta.heroes);
-    const ims = await Promise.all(ids.map((id) => load(new URL(id + '.png?v=1', base))));
+    const ims = await Promise.all(ids.map((id) => load(new URL(id + '.png?v=2', base))));
     ids.forEach((id, i) => { ART.sheets[id] = ims[i]; });
-    if (Object.keys(meta.hats || {}).length) ART.hats = await load(new URL('hats.png?v=1', base));
+    if (Object.keys(meta.hats || {}).length) ART.hats = await load(new URL('hats.png?v=2', base));
     ART.meta = meta;
     ART.headroom = Math.max(0, ...Object.values(meta.hats || {}).map((h) => h.h)) - 2;
     ART.ok = HEROES.every((h) => ART.sheets[h.id]);
@@ -368,6 +368,7 @@ function artURL(id, hat, frame, scale) {
   const key = id + '|' + hat + '|' + frame + '|' + scale;
   if (artCache.has(key)) return artCache.get(key);
   const m = ART.meta.heroes[id], sh = ART.sheets[id], hm = hat !== 'none' && ART.meta.hats ? ART.meta.hats[hat] : null;
+  if (frame >= (m.frames || 4)) frame = FALLBACK[frame] ?? 0;
   const hr = ART.headroom, w = m.w, h = m.h + hr;
   const c = document.createElement('canvas'); c.width = w * scale; c.height = h * scale;
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
@@ -378,12 +379,20 @@ function artURL(id, hat, frame, scale) {
   }
   const url = c.toDataURL(); artCache.set(key, url); return url;
 }
-// which frame a hanging hero shows at time t: swinging legs, now and then a blink; cheer while climbing
-export function heroFrame(t, seed = 0, cheer = false) {
-  if (cheer) return (t / 260 | 0) % 2 ? 3 : 1;
-  const blink = (t + seed * 977) % 3700 < 160;
-  return blink ? 2 : ((t + seed * 331) / 480 | 0) % 2;
+// which frame a hanging hero shows at time t. Frames: 0 hang · 1 legs swing · 2 blink · 3 cheer · 4 wave ·
+// 5 legs swing the other way · 6 sad · 7 big cheer (4–7 come from the second sheet; without it they fall back).
+// mood: 'idle' | 'cheer' (right answer) | 'sad' (wrong) | 'rise' (climbing); true/false still mean rise/idle.
+export function heroFrame(t, seed = 0, mood = 'idle') {
+  if (mood === true) mood = 'rise'; else if (!mood) mood = 'idle';
+  if (mood === 'cheer') return (t / 220 | 0) % 2 ? 7 : 3;
+  if (mood === 'rise') return (t / 300 | 0) % 2 ? 3 : 7;
+  if (mood === 'sad') return 6;
+  const tt = t + seed * 977;
+  if (tt % 3700 < 150) return 2;                                   // a blink now and then
+  if (tt % 9000 > 7600) return (tt / 260 | 0) % 2 ? 4 : 0;         // a little wave every few seconds
+  return [0, 1, 0, 5][(tt / 430 | 0) % 4];                          // legs swinging one way, then the other
 }
+const FALLBACK = [0, 1, 2, 3, 0, 1, 0, 3];
 const codeSpriteURL = spriteURL;
 export function heroURL(id, { hat = 'none', frame = 0, scale = 3 } = {}) {
   return ART.ok ? artURL(id, hat, frame, scale) : codeSpriteURL(id, { hat, scale: Math.max(2, scale + 1) });
