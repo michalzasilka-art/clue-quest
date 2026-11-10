@@ -32,6 +32,7 @@ const LAKE = { x0: 80, x1: 266, y0: 2318, y1: 2338 };
 const PINES = [[2, 34, 2232, 2330], [254, 318, 2240, 2330]];   // the two big snowy pines framing the clearing: x0, x1, y0, y1
 const SUMMITS = [[231, 1660], [63, 1678], [140, 1700], [291, 1716], [15, 1720], [250, 1727], [166, 1750]];
 const MOON = { x: 270, y: 98, r: 28 };
+const NSTAR = { x: 160, y: 57 };
 const SLEIGH_Y = 655, PLANE_Y = 1012;
 const RAINBOW = { x: 300, y: 2192, r: 128 };
 
@@ -142,6 +143,11 @@ const BIRDS = {
     ['d.........d', '.w.......w.', '..ww...ww..', '....wsw....', '.....s.....'],
     ['...........', '.ww.....ww.', 'd..ww.ww..d', '.....s.....', '...........'],
     ['....wsw....', '..ww.s.ww..', '.w.......w.', 'd.........d', '...........'],
+  ], cycle: [0, 1, 2, 1], glide: 1 },
+  owl: { col: { d: '#6a5a92', k: '#7e6ea6', y: '#ffd24a', b: '#3a2e5a' }, frames: [
+    ['d.........d', 'dd..kkk..dd', '.dd.yby.dd.', '..dkkkkkd..', '....kkk....'],
+    ['...........', 'ddd.kkk.ddd', '..ddybydd..', '...kkkkk...', '....kkk....'],
+    ['....kkk....', '...dybyd...', '..ddkkkdd..', '.dd.kkk.dd.', 'dd.......dd'],
   ], cycle: [0, 1, 2, 1], glide: 1 },
   eagle: { col: { k: '#4a3646', d: '#2e2230', h: '#f4f0ff' }, frames: [
     ['d.............d', '.k...........k.', '..kk...h...kk..', '....kkkkkkk....', '......kkk......', '.......d.......'],
@@ -452,6 +458,30 @@ export function createAmbient() {
     g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
   }
 
+  // ---------- a fox trotting across the snowy clearing now and then (it stops to sit and look around) ----------
+  const FOX_PAL = { o: '#f08a3a', O: '#c0602a', w: '#ffffff', k: '#2a2030', e: '#2a2030', s: '#b8bce0' };
+  const FOX = [
+    ['..........O.O.', '..........ooo.', 'ww........oeok', 'Oww..ooooooo..', '.OOooooooooo..', '...oOOOOOOoo..', '...k.k...k.k..', '..ssssssssss..'],
+    ['..........O.O.', '..........ooo.', 'ww........oeok', 'Oww..ooooooo..', '.OOooooooooo..', '...oOOOOOOoo..', '....kk..k.k...', '..ssssssssss..'],
+    ['.........O.O..', '.........ooo..', '.........oeok.', '.......oooo...', 'ww....ooooo...', 'Oww..oOOOoo...', '.OOO.k.k.k....', '..ssssssss....'],
+  ];
+  let fox = null, foxNext = 5000, foxImgs = null;
+  function drawFox(g) {
+    if (!seen(2372, 2402)) { if (fox && v.t - fox.t0 > 4000) fox = null; return; }
+    foxImgs ||= FOX.map((rows) => { const r = fromRows(rows, FOX_PAL); return { r, l: flipX(r) }; });
+    if (!fox && v.t > foxNext) { const dir = R() < .5 ? 1 : -1; fox = { dir, x: dir > 0 ? v.x0 - 14 : v.x0 + v.vw + 14, y: rnd(2380, 2398), t0: v.t, sitAt: v.x0 + rnd(.3, .7) * v.vw, sat: 0 }; }
+    if (!fox) return;
+    let fr;
+    if (fox.sat > 0) { fox.sat -= v.dt; fr = 2; }
+    else {
+      const before = fox.x; fox.x += fox.dir * 15 * v.dt; fr = ((v.t / 140) | 0) % 2;
+      if ((before - fox.sitAt) * (fox.x - fox.sitAt) <= 0 && !fox.done) { fox.sat = rnd(1.6, 2.8); fox.done = true; }
+    }
+    const im = foxImgs[fr][fox.dir > 0 ? 'r' : 'l'], bob = fr === 1 ? -1 : 0;
+    g.drawImage(im, X(fox.x) - (im.width >> 1), Y(fox.y) - im.height + bob);
+    if (fox.x < v.x0 - 30 || fox.x > v.x0 + v.vw + 30) { fox = null; foxNext = v.t + rnd(14000, 30000); }
+  }
+
   // ---------- snow: three depths, leaning with the wind, thicker during a shower ----------
   let flakes = [];
   function buildSnow() {
@@ -541,7 +571,7 @@ export function createAmbient() {
   }
   function drawDust(g) {
     if (seen(1640, 1770)) for (const [sx, sy] of SUMMITS) {
-      if (R() < (.35 + wind.k * 1.6) * 10 * v.dt) dust.push({ x: sx + rnd(-2, 2), y: sy + rnd(0, 3), vx: rnd(4, 9), vy: rnd(-3, 1), g: rnd(1, 4), life: rnd(1.4, 2.6), age: 0, a: rnd(.45, .8) });
+      const k = (1 + wind.k * 2.5) * 14 * v.dt; for (let j = 0; j < k; j++) if (R() < k / Math.ceil(k)) dust.push({ x: sx + rnd(-2, 3), y: sy + rnd(0, 4), vx: rnd(6, 14), vy: rnd(-4, 0), g: rnd(1, 5), life: rnd(1.6, 3), age: 0, a: rnd(.55, .95) });
     }
     g.fillStyle = '#ffffff';
     for (let i = dust.length - 1; i >= 0; i--) {
@@ -584,19 +614,20 @@ export function createAmbient() {
   // ---------- birds ----------
   const flocks = [];
   const BANDS = [   // kind, y0, y1, max flocks
-    ['goose', 1790, 2120, 1], ['small', 2120, 2290, 1], ['goose', 1390, 1620, 1], ['gull', 1365, 1470, 1], ['eagle', 1560, 1730, 1],
+    ['goose', 1790, 2120, 1], ['small', 2120, 2290, 1], ['goose', 1390, 1620, 1], ['gull', 1365, 1470, 1], ['eagle', 1560, 1730, 1], ['owl', 70, 400, 1],
   ];
   function spawnFlocks() {
     for (const [kind, y0, y1, max] of BANDS) {
       const lo = Math.max(y0, v.camY + 12), hi = Math.min(y1, v.camY + v.vh * .8);
       if (hi - lo < 10) continue;
       if (flocks.filter((f) => f.kind === kind && f.y > y0 - 60 && f.y < y1 + 60).length >= max) continue;
-      if (R() > v.dt * .45) continue;
+      if (R() > v.dt * (kind === 'owl' ? .12 : .45)) continue;
       const dir = R() < .72 ? 1 : -1, y = rnd(lo, hi);
       const f = { kind, y, dir, x: dir > 0 ? v.x0 - 30 : v.x0 + v.vw + 30, members: [], t0: v.t, ph: R() * 10 };
       if (kind === 'goose') { const n = 5 + ((R() * 5) | 0); f.speed = rnd(15, 21); for (let i = 0; i < n; i++) { const k = Math.ceil(i / 2), side = i % 2 ? 1 : -1; f.members.push({ dx: -k * 8, dy: side * k * 4.2, ph: k * .55 + R() * .2 }); } }
       if (kind === 'small') { const n = 2 + ((R() * 4) | 0); f.speed = rnd(22, 30); for (let i = 0; i < n; i++) f.members.push({ dx: -i * rnd(6, 11), dy: rnd(-7, 7), ph: R() * 3 }); }
       if (kind === 'gull') { const n = 1 + ((R() * 3) | 0); f.speed = rnd(12, 17); for (let i = 0; i < n; i++) f.members.push({ dx: -i * rnd(10, 18), dy: rnd(-8, 8), ph: R() * 6 }); }
+      if (kind === 'owl') { f.speed = rnd(13, 17); f.members.push({ dx: 0, dy: 0, ph: 0 }); }
       if (kind === 'eagle') { f.speed = rnd(9, 13); f.members.push({ dx: 0, dy: 0, ph: 0 }); f.cx = v.x0 + rnd(.25, .75) * v.vw; f.x = dir > 0 ? v.x0 - 30 : v.x0 + v.vw + 30; f.circle = 0; }
       flocks.push(f);
     }
@@ -667,7 +698,7 @@ export function createAmbient() {
       for (let y = 40; y < 900; y++) for (let x = 1; x < 639; x++) {
         const i = (y * 640 + x) * 4, L = lum(i); if (L < 600) continue;
         if (L < lum(i - 4) || L < lum(i + 4) || L < lum(i - 2560) || L < lum(i + 2560)) continue;
-        const ring = (lum(i - 8) + lum(i + 8) + lum(i - 5120) + lum(i + 5120)) / 4; if (L - ring < 140) continue;
+        const ring = (lum(i - 8) + lum(i + 8) + lum(i - 5120) + lum(i + 5120)) / 4; if (L - ring < 180) continue;
         if (Math.hypot(x / 2 - MOON.x, y / 2 - MOON.y) < MOON.r + 6) continue;
         found.push({ x: x / 2, y: y / 2, p: R() * 20, sp: rnd(.6, 1.6), big: L > 700 });
       }
@@ -697,6 +728,15 @@ export function createAmbient() {
         g.globalAlpha = a; g.drawImage(aurora.c, x, sy0, strip, sy1 - sy0, X(wx), Y(aurora.y0 + sy0 / 2), Math.max(1, Math.round(strip / 2 * s)), Math.round((sy1 - sy0) / 2 * s));
       }
     }
+    // the North Star: a stepped pixel glow that pulses, and its rays flash longer now and then
+    if (seen(NSTAR.y - 50, NSTAR.y + 50)) {
+      const p = .75 + .25 * Math.sin(t / 500);
+      [[17, .035], [10, .06], [5, .1]].forEach(([r, a]) => { const d = disk(r * s, '#fff0b8'); g.globalAlpha = step(a * p, 64); g.drawImage(d, X(NSTAR.x) - (d.width >> 1), Y(NSTAR.y) - (d.height >> 1)); });
+      const ray = Math.round((6 + 5 * Math.max(0, Math.sin(t / 1300))) * s), x = X(NSTAR.x), y = Y(NSTAR.y);
+      g.fillStyle = '#fff6d0';
+      for (let k = 2; k <= ray; k++) { g.globalAlpha = step(.8 * (1 - k / (ray + 1)), 4); g.fillRect(x - k, y, 1, 1); g.fillRect(x + k, y, 1, 1); g.fillRect(x, y - k, 1, 1); g.fillRect(x, y + k, 1, 1); }
+      g.globalAlpha = 1;
+    }
     // the moon breathes a soft halo
     if (seen(MOON.y - 60, MOON.y + 60)) {
       const p = .8 + .2 * Math.sin(t / 2100);
@@ -706,9 +746,9 @@ export function createAmbient() {
     g.fillStyle = '#fff6e6';
     for (const st of stars) {
       if (!onView(st.x, st.y, 2)) continue;
-      const tw = Math.sin(t / 1000 * st.sp + st.p); if (tw < .8) continue;
-      const x = X(st.x), y = Y(st.y), arm = st.big && tw > .96 ? 2 : 1;
-      g.globalAlpha = step((tw - .8) / .2, 3);
+      const tw = Math.sin(t / 1000 * st.sp + st.p); if (tw < .86) continue;
+      const x = X(st.x), y = Y(st.y), arm = st.big && tw > .97 ? 2 : 1;
+      g.globalAlpha = step((tw - .86) / .14, 3);
       g.fillRect(x - arm, y, arm * 2 + 1, 1); g.fillRect(x, y - arm, 1, arm * 2 + 1);
     }
     g.globalAlpha = 1;
@@ -822,6 +862,7 @@ export function createAmbient() {
       drawStorms(g);
       drawNear(g, dcam);
       drawForest(g);
+      drawFox(g);
       drawGlints(g);
       drawDust(g);
       drawRain(g);

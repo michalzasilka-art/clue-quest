@@ -10,7 +10,7 @@
 // The map: one painted picture 640 × 4834 px (five ChatGPT sky pictures and the snowy forest clearing, cross-faded;
 // built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 2 px per world unit.
 // 0 m at the forest floor up to 1500 m at the North Star.
-import { createAmbient } from './ambient.js?v=11';
+import { createAmbient } from './ambient.js?v=12';
 export const W = 320, VH = 180, WH = 2417;
 const MAP = { slices: 7, slicePx: 800, heightPx: 4834, pxPerUnit: 2 };
 const O = WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
@@ -207,7 +207,7 @@ function scene(canvas, { viewW, phone }) {
       });
       g.imageSmoothingEnabled = false;
     }
-    for (const st of stars) if (vis(st.y, 2)) {
+    if (!painted) for (const st of stars) if (vis(st.y, 2)) {   // (the painted map has its own stars; ambient.js twinkles them)
       const dark = painted ? Math.max(0, Math.min(1, (900 - st.y) / 300)) : Math.max(0, Math.min(1, (1500 + O - st.y) / 700)), tw = .55 + .45 * Math.sin(t / 700 + st.p);
       g.globalAlpha = dark * tw; g.fillStyle = '#ffffff'; const sz = st.r > .7 ? 2 : 1; g.fillRect(Math.round(X(st.x)), Math.round(Y(st.y)), sz, sz);
     }
@@ -234,7 +234,7 @@ function scene(canvas, { viewW, phone }) {
       });
       g.globalCompositeOperation = 'source-over';
     }
-    if (vis(TOPY, 80)) {
+    if (!painted && vis(TOPY, 80)) {   // (over the painted map, ambient.js gives the North Star a pixel glow)
       const sx = X(160), sy = Y(TOPY), p = .75 + .25 * Math.sin(t / 500);
       const gl = g.createRadialGradient(sx, sy, 0, sx, sy, 40 * s); gl.addColorStop(0, `rgba(255,240,170,${(painted ? .35 : .7) * p})`); gl.addColorStop(1, 'rgba(255,240,170,0)');
       g.fillStyle = gl; g.beginPath(); g.arc(sx, sy, 40 * s, 0, 7); g.fill();
