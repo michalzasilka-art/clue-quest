@@ -356,3 +356,30 @@ body[data-screen="lobby"] #ruler, body[data-screen="question"] #ruler, body[data
 #fly .board-panel { width: calc(28 * var(--u)); }
 .streak-panel { left: calc(2.4 * var(--u)); top: auto; bottom: calc(2.4 * var(--u)); width: calc(28 * var(--u)); }
 #zoneBanner { left: calc(60 * var(--u)); top: 30%; max-width: calc(48 * var(--u)); }
+
+/* =================== smooth, not pixel-stepped (2026-11-10, third version) =================== */
+#world, .is-player #sky { image-rendering: auto; }
+@keyframes sway { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+@keyframes dangle { from { transform: rotate(5deg); } to { transform: rotate(-5deg); } }
+.tok .bal { animation: sway 2.8s ease-in-out infinite alternate; animation-delay: var(--d, 0s); }
+.tok .hero { animation: dangle 2.8s ease-in-out infinite alternate; animation-delay: var(--d, 0s); }
+.tok.rise .gain { animation: gainup 3.2s ease-out .4s forwards; }
+.tok.nod .hero { animation: nod .55s ease-out; }
+.tok.pop { animation: tokpop2 .6s cubic-bezier(.2, 1.5, .4, 1) both; }
+/* wind streaks under a hero while it climbs */
+.tok::after { content: ''; position: absolute; left: 15%; right: 15%; top: 100%; height: 0; opacity: 0;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .85) 0 2px, transparent 2px 9px); -webkit-mask: linear-gradient(#000, transparent); mask: linear-gradient(#000, transparent); transition: opacity .4s, height .4s; }
+.tok.rise::after { height: 120%; opacity: .8; animation: streak .5s linear infinite; }
+@keyframes streak { from { background-position: 0 0; } to { background-position: 0 30px; } }
+.flyer { animation: floaty 3s ease-in-out infinite alternate; }
+.flyer .fbal { animation: sway 2.8s ease-in-out infinite alternate; }
+.flyer .fhero { animation: dangle 2.8s ease-in-out infinite alternate; }
+.flyer.boing { animation: boing .5s ease-out; }
+.flyer.up { animation: liftoff 1.6s cubic-bezier(.2, .8, .3, 1) both; }
+.step .sbal { animation: sway 2.8s ease-in-out infinite alternate; }
+.hop { animation: hop2 1.4s ease-in-out infinite; }
+@keyframes hop2 { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10%); } }
+.pop { animation-timing-function: cubic-bezier(.2, 1.5, .4, 1); }
+#zoneBanner { left: calc(33 * var(--u)); top: calc(2.4 * var(--u)); transform: none; max-width: calc(54 * var(--u)); font-size: calc(1.8 * var(--u)); }
+#zoneBanner.pop { animation: bannerin .6s cubic-bezier(.2, 1.5, .4, 1) both; }
+@keyframes bannerin { from { opacity: 0; transform: translateY(-40%) scale(.8); } to { opacity: 1; transform: none; } }

@@ -244,7 +244,11 @@ cam.onFrame((camY, t) => {
     const tk = toks.get(p.pid); if (!tk) return;
     let x, y;
     if (phase === 'lobby') ({ x, y } = lobbyPos(p, i, n));
-    else { x = laneX(p.lane); y = altY(p.shown) - 6 - (p.lane % 3) * 13 - 2 * Math.sin(t / 700 + p.lane); }   // three staggered rows so name tags never sit on each other
+    else {
+      // three staggered rows so name tags never sit on each other; every flyer drifts and bobs gently in the wind
+      x = laneX(p.lane) + 1.6 * Math.sin(t / 2300 + p.lane * 1.7);
+      y = altY(p.shown) - 6 - (p.lane % 3) * 13 - 3 * Math.sin(t / 900 + p.lane * 2.3);
+    }
     tk.el.style.left = x + '%';
     tk.el.style.top = ((y - camY) / VH * 100).toFixed(2) + '%';
     tk.el.style.zIndex = phase === 'lobby' ? 10 + Math.round(y) % 100 : 200 - i;
