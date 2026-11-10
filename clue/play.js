@@ -2,7 +2,7 @@
 // round read the clue and tap one of 3 words → right/wrong, metres climbed, streak bonus, height and place → final.
 import { $, $$, esc, store, show, ordinal } from './ui.js';
 import { phoneWorld } from './world.js';
-import { HEROES, HATS, heroURL, heroFrame, artReady, hatURL, balloonsURL } from './sprites.js';
+import { HEROES, HATS, heroURL, heroFrame, artReady, hatURL, balloonsURL, heroHold } from './sprites.js';
 import { joinGame, cleanCode } from './net.js';
 import { sfx, unlock } from './sound.js';
 
@@ -107,6 +107,7 @@ function drawFlyer(which, s = streak) {
   for (const f of $$('.flyer.' + which)) {
     f.querySelector('.fhero').src = heroURL(me.char, { hat: me.hat, scale: 6 });
     f.querySelector('.fbal').src = balloonsURL(3 + Math.min(3, s), s >= 3, 1, 6);
+    f.style.setProperty('--hold', heroHold(me.char).toFixed(3));
   }
 }
 
@@ -153,7 +154,7 @@ $('#meGo').onclick = async () => {
   const n = $('#nameIn').value.replace(/\s+/g, ' ').trim();
   if (!n) { $('#meErr').textContent = 'Type your name first.'; $('#nameIn').focus(); return; }
   me.name = n.slice(0, 14); save(); sfx.tap();
-  if (soloMode) { import('./solo.js?v=9').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
+  if (soloMode) { import('./solo.js?v=10').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
   if (editing && game) { game.send({ type: 'look', name: me.name, char: me.char, hat: me.hat }); drawWait(); show('wait'); return; }
   connect();
 };
@@ -272,7 +273,7 @@ $('#menuGo').onclick = () => {
   unlock(); sfx.tap();
   if (mode === 'board') { location.href = new URL('./?host', location.href).href; return; }
   // Individual: its own lobby (hero, hat, name, topic) in solo.js
-  import('./solo.js?v=9').then((m) => m.startSolo(cam, me, () => openMenu(), save));
+  import('./solo.js?v=10').then((m) => m.startSolo(cam, me, () => openMenu(), save));
 };
 $('#menuJoin').onclick = () => { unlock(); sfx.tap(); soloMode = false; codeIn.value = ''; drawDigits(); show('join'); };
 

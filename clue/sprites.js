@@ -351,12 +351,12 @@ const artCache = new Map();
 export const artReady = (async () => {
   try {
     const base = new URL('art/heroes/', import.meta.url);
-    const meta = await (await fetch(new URL('sprites.json?v=2', base))).json();
+    const meta = await (await fetch(new URL('sprites.json?v=3', base))).json();
     const load = (src) => new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = src; });
     const ids = Object.keys(meta.heroes);
-    const ims = await Promise.all(ids.map((id) => load(new URL(id + '.png?v=2', base))));
+    const ims = await Promise.all(ids.map((id) => load(new URL(id + '.png?v=3', base))));
     ids.forEach((id, i) => { ART.sheets[id] = ims[i]; });
-    if (Object.keys(meta.hats || {}).length) ART.hats = await load(new URL('hats.png?v=2', base));
+    if (Object.keys(meta.hats || {}).length) ART.hats = await load(new URL('hats.png?v=3', base));
     ART.meta = meta;
     ART.headroom = Math.max(0, ...Object.values(meta.hats || {}).map((h) => h.h)) - 2;
     ART.ok = HEROES.every((h) => ART.sheets[h.id]);
@@ -374,7 +374,9 @@ function artURL(id, hat, frame, scale) {
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
   g.drawImage(sh, frame * m.w, 0, m.w, m.h, 0, hr * scale, m.w * scale, m.h * scale);
   if (hm && ART.hats) {
-    const hx = m.head.x - hm.w / 2, hy = hr + m.head.y - hm.h + Math.round(hm.h * .3);   // the brim sits a little over the head
+    // the skull top in this frame (ears, antlers and antennae stick up past it); the brim sinks a little over the head
+    const hd = (m.heads && m.heads[frame]) || m.head, sink = hm.sink ?? Math.round(hm.h * .3);
+    const hx = hd.x - hm.w / 2, hy = hr + hd.y - hm.h + sink;
     g.drawImage(ART.hats, hm.x, hm.y, hm.w, hm.h, Math.round(hx) * scale, Math.round(hy) * scale, hm.w * scale, hm.h * scale);
   }
   const url = c.toDataURL(); artCache.set(key, url); return url;
@@ -393,6 +395,12 @@ export function heroFrame(t, seed = 0, mood = 'idle') {
   return [0, 1, 0, 5][(tt / 430 | 0) % 4];                          // legs swinging one way, then the other
 }
 const FALLBACK = [0, 1, 2, 3, 0, 1, 0, 3];
+// where the raised hands hold the balloon strings, measured down from the top of the hero picture as a share of its
+// width: the top of the head (a hat, drawn over the strings, hides the knot)
+export function heroHold(id) {
+  if (ART.ok && ART.meta.heroes[id]) { const m = ART.meta.heroes[id], hd = (m.heads && m.heads[0]) || m.head; return (ART.headroom + hd.y + 1) / m.w; }
+  const h = heroById(id); return (6 + h.hat[1]) / 16;
+}
 const codeSpriteURL = spriteURL;
 export function heroURL(id, { hat = 'none', frame = 0, scale = 3 } = {}) {
   return ART.ok ? artURL(id, hat, frame, scale) : codeSpriteURL(id, { hat, scale: Math.max(2, scale + 1) });

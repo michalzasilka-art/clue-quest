@@ -4,7 +4,7 @@
 // tags on top, the biggest streak shown → next clue → podium. This browser is the game: players, heights, clock.
 import { $, $$, esc, shuffle, store, show, qrCanvas, confetti, ordinal } from './ui.js';
 import { world, W as WW, VH, WH, GROUND, TOPY, ZONES, zoneAt } from './world.js';
-import { HEROES, HATS, heroURL, heroFrame, artReady, balloonsURL } from './sprites.js';
+import { HEROES, HATS, heroURL, heroFrame, artReady, balloonsURL, heroHold } from './sprites.js';
 import { SETS, setById, parseCustom } from './words.js';
 import { hostGame } from './net.js';
 import { sfx, unlock, music, setMuted, isMuted } from './sound.js';
@@ -227,6 +227,7 @@ function syncTokens() {
     }
     const b = balloonsFor(p), bs = balloonsURL(b.n, b.gold, p.lane); if (t.bal.getAttribute('src') !== bs) t.bal.src = bs;
     t.tag.textContent = p.name;
+    t.el.style.setProperty('--hold', heroHold(p.char).toFixed(3));   // the strings end in the hero's hands
     t.el.classList.toggle('off', !p.online);
     t.el.classList.toggle('hot', p.streak >= 3);
   }
@@ -414,7 +415,7 @@ $('#flyNext').onclick = () => {
 function podium() {
   phase = 'podium';
   const r = ranked(), order = [[1, r[1]], [0, r[0]], [2, r[2]]];
-  $('#steps').innerHTML = order.filter(([, p]) => p).map(([i, p]) => `<div class="step p${i + 1}"><img class="px-img sbal" src="${balloonsURL(3 + Math.min(3, p.best), p.best >= 3, p.lane)}" alt="">${img(p.char, p.hat, i === 0 ? 'hop' : '')}<div class="nm">${esc(p.name)}</div><div class="sc">${p.alt} m</div><div class="blk px">${i + 1}</div></div>`).join('');
+  $('#steps').innerHTML = order.filter(([, p]) => p).map(([i, p]) => `<div class="step p${i + 1}" style="--hold:${heroHold(p.char).toFixed(3)}"><img class="px-img sbal" src="${balloonsURL(3 + Math.min(3, p.best), p.best >= 3, p.lane)}" alt="">${img(p.char, p.hat, i === 0 ? 'hop' : '')}<div class="nm">${esc(p.name)}</div><div class="sc">${p.alt} m</div><div class="blk px">${i + 1}</div></div>`).join('');
   show('podium'); lookAtLeader();
   setTimeout(() => { sfx.fanfare(); confetti(5000); }, 2300);
   for (const p of players.values()) net.send(p.pid, screenFor(p.pid));

@@ -5,11 +5,12 @@
 // the aurora with a sleigh passing → the starry night with the moon → the North Star at the very top.
 // Everything moves softly: clouds drift at different speeds, birds flap, balloons bob, smoke curls, lights twinkle,
 // snow falls near the ground, stars twinkle and shoot, the aurora waves.
-// phoneWorld() draws the same village and sky behind a phone.
+// phoneWorld() draws the same village and sky behind a phone. Over the painted map, ambient.js adds the living sky.
 
 // The map: one painted picture 640 × 4834 px (five ChatGPT sky pictures and the snowy forest clearing, cross-faded;
 // built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 2 px per world unit.
 // 0 m at the forest floor up to 1500 m at the North Star.
+import { createAmbient } from './ambient.js?v=10';
 export const W = 320, VH = 180, WH = 2417;
 const MAP = { slices: 7, slicePx: 800, heightPx: 4834, pxPerUnit: 2 };
 const O = WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
@@ -165,9 +166,10 @@ function scene(canvas, { viewW, phone }) {
   const birds = Array.from({ length: 9 }, (_, i) => ({ x: rand() * W, y: 1560 + O + (i % 3) * 70 + rand() * 30, v: .12 + rand() * .1, p: rand() * 6 }));
   const balloons = [[60, 1640, 9, '#ff5a6a', '#ffd24a'], [250, 1560, 7, '#4a8aff', '#ffffff'], [150, 1720, 6, '#3ac85a', '#ffd24a'], [290, 1880, 5, '#a86aff', '#ff8ad8']].map(([x, y, r, a, b]) => ({ x, y: y + O, r, a, b, v: .04 + r * .004 }));
   let camY = WH - VH, target = camY, onFrame = null, shoot = null;
+  const amb = createAmbient();
   // the painted map, in slices; until every slice is in, the drawn sky and village show instead
   const slices = Array(MAP.slices).fill(null); let painted = false; const forestSky = null;
-  slices.forEach((_, i) => { const im = new Image(); im.onload = () => { slices[i] = im; painted = slices.every(Boolean); }; im.src = new URL(`art/map-${i}.webp`, import.meta.url).href; });
+  slices.forEach((_, i) => { const im = new Image(); im.onload = () => { slices[i] = im; painted = slices.every(Boolean); }; im.src = new URL(`art/map-${i}.webp?v=2`, import.meta.url).href; });
   const SLEIGH_Y = 640, PLANE_Y = 1010;   // in the aurora picture / over the cloud sea
   function fit() {
     // pixel art with big crisp pixels like a classic pixel-art game: the canvas has 2 pixels per world unit on big
@@ -243,6 +245,12 @@ function scene(canvas, { viewW, phone }) {
       g.restore();
       g.fillStyle = '#ffd24a'; g.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, r = (k % 2 ? 3.5 : 8) * s; g.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r); } g.fill();
       }
+    }
+    if (painted) {
+      // the living sky: wind, clouds, rain, rainbow, birds, sunlight, smoke, lights, snow, leaves (ambient.js)
+      amb.draw(g, { t, camY, vh, vw, x0: x0(), s, cw, ch }, slices, MAP.slicePx);
+      if (onFrame) onFrame(camY, t);
+      return;
     }
     if (camY < 1000 + O) {
       if (!shoot && Math.random() < .012) shoot = { x: Math.random() * W, y: camY + Math.random() * vh * .5, a: 0 };
@@ -328,13 +336,16 @@ function scene(canvas, { viewW, phone }) {
     if (onFrame) onFrame(camY, t);
   }
   requestAnimationFrame(frame);
-  return {
+  const api = {
     get y() { return camY; },
     look(y, now) { free = true; target = Math.max(0, Math.min(WH - vh, y)); if (now) camY = target; },
     rest(now) { free = false; target = WH - vh; if (now) camY = target; },   // back to the ground (phones)
     get viewH() { return vh; }, get viewW() { return vw; },
     onFrame(fn) { onFrame = fn; },
+    get wind() { return amb.wind; },
   };
+  (window.CQW ||= []).push({ api, amb });   // for testing in the browser console
+  return api;
 }
 
 export function world(canvas) { return scene(canvas, { viewW: W }); }

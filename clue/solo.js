@@ -4,7 +4,7 @@
 // droops and climbs, and the next clue comes by itself. The camera follows you up the painted map to 1500 m; at the
 // end you get a title for how high you flew and your best height is kept on this device.
 import { $, $$, esc, store, show, shuffle, confetti } from './ui.js';
-import { HEROES, HATS, heroURL, heroFrame, hatURL, balloonsURL } from './sprites.js';
+import { HEROES, HATS, heroURL, heroFrame, hatURL, balloonsURL, heroHold } from './sprites.js';
 import { SETS } from './words.js';
 import { W, WH, GROUND, TOPY, ZONES, zoneAt } from './world.js';
 import { sfx, unlock } from './sound.js';
@@ -100,6 +100,7 @@ function drawLobby(bounce) {
   $('#slHeroName').textContent = h.name.toUpperCase();
   $('#slHeroTag').textContent = h.ours ? '★ FOXINO CREW' : 'WINTER FRIEND';
   $('#slBal').src = balloonsURL(3, false, 2, 6);
+  $('.sl-hero').style.setProperty('--hold', heroHold(h.id).toFixed(3));
   $('#slHats').innerHTML = HATS.map((t) => `<button class="sl-hat${t.id === me.hat ? ' on' : ''}" data-id="${t.id}" title="${esc(t.name)}"><img class="px-img" src="${hatURL(t.id)}" alt="${esc(t.name)}"></button>`).join('');
   $('#slTopics').innerHTML = SETS.map((s) => `<button class="sl-topic${s.id === topic.id ? ' on' : ''}" data-id="${s.id}">${esc(s.title)}</button>`).join('');
   const on = $('#slTopics .on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -126,6 +127,7 @@ function begin() {
   rounds = shuffle(topic.words).slice(0, ROUNDS).map(([word, desc, w1, w2]) => { const opts = shuffle([word, w1, w2]); return { word, desc, opts, right: opts.indexOf(word) }; });
   Object.assign(P, { alt: 0, shown: 0, from: 0, streak: 0, best: 0, right: 0, gain: 0, mood: 'idle', moodUntil: 0, zone: ZONES[0][0] });
   $('#soloMe .tag').textContent = me.name;
+  $('#soloMe').style.setProperty('--hold', heroHold(me.char).toFixed(3));
   $('#soloMark img').src = heroURL(me.char, { hat: me.hat });
   drawBalloons();
   $('#soloLayer').hidden = false; $('#soloStreak').hidden = true;
@@ -227,6 +229,7 @@ function finish() {
   $('#seHeight').textContent = P.alt + ' m';
   $('#seTitle').textContent = titleFor(P.alt);
   $('#seHero').src = heroURL(me.char, { hat: me.hat, frame: P.alt ? 3 : 0, scale: 6 });
+  $('.se-hero').style.setProperty('--hold', heroHold(me.char).toFixed(3));
   $('#seBal').src = balloonsURL(3 + Math.min(3, P.best), P.best >= 3, 2, 6);
   $('#seRight').textContent = `${P.right}/${ROUNDS}`;
   $('#seBest').textContent = best + ' m';

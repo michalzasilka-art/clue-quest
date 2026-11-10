@@ -640,3 +640,20 @@ body:not([data-screen="setup"]) #menuBtn { opacity: .7; }
   .sg-result b { font-size: min(clamp(28px, 6vh, 54px), 11vw); }
 }
 @media (min-aspect-ratio: 11/10) { .sg-clue { top: 36vh; } .sg-result { top: 37vh; } }
+
+/* =================== v7: a smaller hero in Individual, leaning in the wind =================== */
+#soloMe { width: min(16.5vw, 11vh); }
+#soloMe .tag { font-size: clamp(10px, 1.5vh, 14px); padding: 2px 6px 1px; }
+#soloMe .bal { rotate: calc(var(--wind, 0) * 10deg); transition: rotate .6s ease-out; }
+#soloMe .hero { rotate: calc(var(--wind, 0) * 4deg); transition: rotate .8s ease-out; }
+/* the balloon strings end in the hero's raised hands (--hold: the top of the head, as a share of the hero's width;
+   the knot sits 1/24 of the balloon picture above its bottom) */
+#soloMe .bal { margin-bottom: calc(var(--hold, .5) * -100% - 6.25%); }
+.sl-bal { margin-bottom: calc(var(--hold, .6) * -66% - 4.2%); }
+.se-hero img:first-child { margin-bottom: calc(var(--hold, .6) * -92px - 5.8px); }
+/* the same for the class board's heroes, the podium and the phone's flyer (defaults = the old spacing) */
+.tok .bal { margin-bottom: calc(var(--hold, .3175) * -100% - 6.25%); }
+body[data-screen="lobby"] .tok .bal { margin-bottom: calc(var(--hold, .25) * -100% - 5%); }
+.flyer .fbal { margin-bottom: calc(var(--hold, .521) * -96px - 6px); }
+.flyer.pick .fbal { margin-bottom: calc(var(--hold, .521) * -72px - 4.5px); }
+.step .sbal { margin-bottom: calc(var(--hold, .496) * -9 * var(--u) - .54 * var(--u)); }
