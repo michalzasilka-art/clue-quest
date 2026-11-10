@@ -154,7 +154,7 @@ $('#meGo').onclick = async () => {
   const n = $('#nameIn').value.replace(/\s+/g, ' ').trim();
   if (!n) { $('#meErr').textContent = 'Type your name first.'; $('#nameIn').focus(); return; }
   me.name = n.slice(0, 14); save(); sfx.tap();
-  if (soloMode) { import('./solo.js?v=10').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
+  if (soloMode) { import('./solo.js?v=11').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
   if (editing && game) { game.send({ type: 'look', name: me.name, char: me.char, hat: me.hat }); drawWait(); show('wait'); return; }
   connect();
 };
@@ -273,7 +273,7 @@ $('#menuGo').onclick = () => {
   unlock(); sfx.tap();
   if (mode === 'board') { location.href = new URL('./?host', location.href).href; return; }
   // Individual: its own lobby (hero, hat, name, topic) in solo.js
-  import('./solo.js?v=10').then((m) => m.startSolo(cam, me, () => openMenu(), save));
+  import('./solo.js?v=11').then((m) => m.startSolo(cam, me, () => openMenu(), save));
 };
 $('#menuJoin').onclick = () => { unlock(); sfx.tap(); soloMode = false; codeIn.value = ''; drawDigits(); show('join'); };
 

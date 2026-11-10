@@ -55,6 +55,18 @@ function disk(r, col) {   // a crisp pixel circle of radius r (canvas px)
   for (let y = -r; y <= r; y++) { const hw = Math.floor(Math.sqrt(r * r - y * y + r * .8)); g.fillRect(r - hw, y + r, hw * 2 + 1, 1); }
   diskCache.set(key, c); return c;
 }
+const puffCache = new Map();
+function puff(r) {   // a smoke puff: light on top, a shaded underside, a dithered (see-through) rim
+  r = Math.max(1, Math.round(r)); if (puffCache.has(r)) return puffCache.get(r);
+  const d = r * 2 + 1, c = canvas(d, d), g = c.getContext('2d');
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    const q = x * x + y * y; if (q > r * r + r * .8) continue;
+    const rim = q > (r - 1) * (r - 1) + (r - 1) * .8;
+    if (rim && r > 1 && (x + y) & 1) continue;
+    g.fillStyle = x + y > r * .5 ? '#cfcce6' : y < -r * .3 ? '#ffffff' : '#ecebf8'; g.fillRect(x + r, y + r, 1, 1);
+  }
+  puffCache.set(r, c); return c;
+}
 function line(g, x0, y0, x1, y1) {   // Bresenham, 1 px
   x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
   const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
@@ -200,6 +212,7 @@ const sparks = () => sparkFrames || (sparkFrames = SPARK.map((r) => fromRows(r, 
 
 // ======================================================================================================================
 export function createAmbient() {
+  const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   let s = 0, last = 0, lastCam = null, built = false;
   const v = { t: 0, dt: 0, camY: 0, vh: 180, vw: W, x0: 0, cw: 320, ch: 180 };
   const X = (x) => Math.round((x - v.x0) * s), Y = (y) => Math.round((y - v.camY) * s);
@@ -237,10 +250,12 @@ export function createAmbient() {
   let clouds = [];
   function buildClouds() {
     const r = rng(77), list = [];
-    const add = (n, y0, y1, w0, w1, pal, kind, a = 1) => { for (let i = 0; i < n; i++) list.push({ x: r() * (W + 120) - 60, y: y0 + r() * (y1 - y0), w: w0 + r() * (w1 - w0), pal, kind, a, depth: .5 + r() * .8, seed: (r() * 1e9) | 0 }); };
-    add(14, 1830, 2165, 14, 40, 'sunset', 'puff');            // the pink evening clouds over the forest
-    add(7, 1610, 1700, 16, 38, 'sunset', 'puff');             // round the peaks, still pink
-    add(12, 1360, 1600, 16, 46, 'day', 'puff');               // the blue sky under the cloud sea
+    const add = (n, y0, y1, w0, w1, pal, kind, a = 1) => { for (let i = 0; i < n; i++) { const w = w0 + r() * (w1 - w0); list.push({ x: r() * (W + 120) - 60, y: y0 + r() * (y1 - y0), w, pal, kind, a, depth: w > 50 ? .45 + r() * .2 : .6 + r() * .7, seed: (r() * 1e9) | 0 }); } };
+    add(6, 1830, 2165, 14, 30, 'sunset', 'puff');             // the pink evening clouds over the forest: a few small
+    add(3, 1850, 2120, 40, 64, 'sunset', 'puff');             // and a few big slow ones
+    add(4, 1610, 1700, 18, 44, 'sunset', 'puff');             // round the peaks, still pink
+    add(5, 1360, 1600, 16, 34, 'day', 'puff');                // the blue sky under the cloud sea
+    add(3, 1380, 1580, 44, 70, 'day', 'puff');
     add(10, 1130, 1350, 50, 110, 'sea', 'wisp', .55);         // mist drifting over the cloud sea
     add(10, 860, 1110, 50, 120, 'night', 'wisp', .8);         // thin moonlit streaks up high
     add(5, 480, 860, 60, 130, 'night', 'wisp', .4);           // in front of the aurora, very faint
@@ -409,8 +424,8 @@ export function createAmbient() {
       if (p.age > p.life) { smoke.splice(i, 1); continue; }
       const f = p.age / p.life;
       p.y -= (6.5 - 3 * f) * v.dt; p.x += (wind.v * .55 * Math.min(1, f * 3) + 1.2 * Math.sin(p.age * 1.3 + p.sw)) * v.dt;
-      const d = disk((.8 + f * 3.8) * s, f < .35 ? '#f2f0fa' : '#dcdaf0');
-      g.globalAlpha = step(.6 * (1 - f) * Math.min(1, p.age * 3), 5); g.drawImage(d, X(p.x) - (d.width >> 1), Y(p.y) - (d.height >> 1));
+      const d = puff((.8 + f * 3.8) * s);
+      g.globalAlpha = step(.8 * (1 - f) * Math.min(1, p.age * 3), 5); g.drawImage(d, X(p.x) - (d.width >> 1), Y(p.y) - (d.height >> 1));
     }
     g.globalAlpha = 1;
     // warm light: lanterns flicker, the cabin window glows, the star on the tree twinkles
@@ -440,7 +455,7 @@ export function createAmbient() {
   // ---------- snow: three depths, leaning with the wind, thicker during a shower ----------
   let flakes = [];
   function buildSnow() {
-    flakes = Array.from({ length: Math.round(v.cw * v.ch / 260) }, () => newFlake(true));
+    flakes = Array.from({ length: Math.round(v.cw * v.ch / (calm ? 700 : 260)) }, () => newFlake(true));
   }
   function newFlake(anywhere) {
     const z = R(), depth = z < .55 ? .55 : z < .88 ? .85 : z < .985 ? 1.2 : 1.6;
@@ -469,7 +484,7 @@ export function createAmbient() {
   function drawLeaves(g, dcam) {
     const low = seen(1840, 2420);
     if (low && leaves.length < 26) {
-      if (wind.k > .12 && R() < wind.k * 9 * v.dt) { const y0 = Math.max(0, Y(1900)); if (y0 < v.ch - 10) leaves.push(newLeaf(-4, rnd(y0, v.ch * .95))); }
+      if (!calm && wind.k > .12 && R() < wind.k * 9 * v.dt) { const y0 = Math.max(0, Y(1900)); if (y0 < v.ch - 10) leaves.push(newLeaf(-4, rnd(y0, v.ch * .95))); }
       if (seen(2200, 2340) && R() < .5 * v.dt) { const p = pick(PINES); leaves.push(newLeaf(X(rnd(p[0], p[1])), Y(rnd(p[2], p[2] + 50)))); }
     }
     for (let i = leaves.length - 1; i >= 0; i--) {
@@ -496,10 +511,10 @@ export function createAmbient() {
       }
       pts.push([u, amp * Math.sin(u / lam)]);
     }
-    return { pts, x: rnd(-60, v.cw * .55), y: rnd(v.ch * .06, v.ch * .8), t0: v.t, life: rnd(1100, 1700), tail: rnd(22, 40) | 0 };
+    return { pts, x: rnd(-60, v.cw * .55), y: rnd(v.ch * .06, v.ch * .8), t0: v.t, life: rnd(1200, 1900), tail: rnd(34, 60) | 0 };
   }
   function drawStreaks(g, dcam) {
-    if (wind.k > .28 && streaks.length < 5 && R() < wind.k * 2.2 * v.dt) streaks.push(newStreak());
+    if (!calm && wind.k > .22 && streaks.length < 7 && R() < wind.k * 3.5 * v.dt) streaks.push(newStreak());
     g.fillStyle = '#ffffff';
     for (let i = streaks.length - 1; i >= 0; i--) {
       const st = streaks[i], f = (v.t - st.t0) / st.life;
@@ -508,7 +523,7 @@ export function createAmbient() {
       const head = Math.floor(f * f * (3 - 2 * f) * (st.pts.length + st.tail)), fade = Math.sin(Math.PI * f);
       for (let k = Math.max(0, head - st.tail); k < Math.min(head, st.pts.length); k++) {
         const along = (k - (head - st.tail)) / st.tail;
-        g.globalAlpha = step(.55 * fade * along, 3); if (g.globalAlpha <= 0) continue;
+        g.globalAlpha = step(.8 * fade * along, 3); if (g.globalAlpha <= 0) continue;
         g.fillRect(Math.round(st.x + st.pts[k][0]), Math.round(st.y + st.pts[k][1]), 1, 1);
       }
     }
@@ -698,7 +713,7 @@ export function createAmbient() {
     }
     g.globalAlpha = 1;
     // shooting stars
-    if (seen(0, 800) && shooting.length < 2 && R() < v.dt * .3) {
+    if (!calm && seen(0, 800) && shooting.length < 2 && R() < v.dt * .3) {
       const dir = R() < .5 ? -1 : 1, a = rnd(.3, .6);
       shooting.push({ x: v.x0 + rnd(.15, .85) * v.vw, y: Math.min(780, v.camY + rnd(.05, .5) * v.vh), vx: dir * Math.cos(a) * 230, vy: Math.sin(a) * 230, t0: t, life: rnd(500, 850) });
     }
@@ -747,6 +762,28 @@ export function createAmbient() {
     }
   }
 
+  // ---------- near wisps: big soft clouds close to the camera; they rush past (1.7× the map) while you climb ----------
+  const near = [];
+  function newNear(y) {
+    const wy = v.camY + y / s, pal = wy > 1700 ? 'sunset' : wy > 1350 ? 'day' : wy > 1130 ? 'sea' : 'night';
+    const w = Math.round(rnd(90, 150) * s), img = wispSprite((R() * 1e9) | 0, w, CLOUD_PAL[pal]);
+    return { x: rnd(-w * .5, v.cw - w * .5), y, img, a: rnd(.32, .5) };
+  }
+  function drawNear(g, dcam) {
+    if (calm) return;
+    while (near.length < 3) near.push(newNear(near.length ? -rnd(30, v.ch * .9) : rnd(0, v.ch)));
+    for (let i = 0; i < near.length; i++) {
+      const n = near[i], h = n.img.height;
+      n.y += dcam * 1.7; n.x += (1.5 + wind.v * .2) * s * v.dt;
+      if (n.y > v.ch + h + 20 || n.y < -v.ch * 1.6) { near[i] = newNear(dcam >= 0 ? -h - rnd(20, v.ch * .9) : v.ch + rnd(20, v.ch * .5)); continue; }
+      if (n.x > v.cw + 10) n.x = -n.img.width - 10;
+      const wy = v.camY + n.y / s, fade = smooth(430, 520, wy) * (1 - smooth(2080, 2160, wy));
+      if (fade <= 0) continue;
+      g.globalAlpha = step(n.a * fade, 8); g.drawImage(n.img, Math.round(n.x), Math.round(n.y) - h);
+    }
+    g.globalAlpha = 1;
+  }
+
   // ---------- a soft grey-violet dimming while it rains ----------
   function drawGloom(g) {
     if (wx.rain <= 0) return;
@@ -783,6 +820,7 @@ export function createAmbient() {
       drawClouds(g, true);
       drawGloom(g);
       drawStorms(g);
+      drawNear(g, dcam);
       drawForest(g);
       drawGlints(g);
       drawDust(g);

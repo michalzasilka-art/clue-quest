@@ -151,8 +151,10 @@ function loop(t) {
   const y = altY(P.shown) - hover - 4 * Math.sin(t / 1000);
   cam.look(altY(P.shown) - hover - vh * (wide ? .64 : .5));   // feet half-way down a phone, lower on a wide screen so the balloons clear the top bar
   const sx = wide ? 26 : 22, el = $('#soloMe');
+  // on a fast climb the camera lags behind: keep the whole hero (balloons and name too) below the top bar meanwhile
+  const minTop = Math.min(.6, (el.offsetHeight + 58) / innerHeight);
   el.style.left = (sx + 1.5 * Math.sin(t / 2300)) + '%';
-  el.style.top = ((y - cam.y) / vh * 100).toFixed(2) + '%';
+  el.style.top = (Math.max(minTop, (y - cam.y) / vh) * 100).toFixed(2) + '%';
   const mood = t < P.moodUntil ? P.mood : (phase === 'climb' ? 'rise' : 'idle');
   const src = heroURL(me.char, { hat: me.hat, frame: heroFrame(t, 3, mood) });
   if (el.dataset.src !== src) { el.querySelector('.hero').src = src; el.dataset.src = src; }

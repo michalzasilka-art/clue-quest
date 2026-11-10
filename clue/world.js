@@ -10,7 +10,7 @@
 // The map: one painted picture 640 × 4834 px (five ChatGPT sky pictures and the snowy forest clearing, cross-faded;
 // built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 2 px per world unit.
 // 0 m at the forest floor up to 1500 m at the North Star.
-import { createAmbient } from './ambient.js?v=10';
+import { createAmbient } from './ambient.js?v=11';
 export const W = 320, VH = 180, WH = 2417;
 const MAP = { slices: 7, slicePx: 800, heightPx: 4834, pxPerUnit: 2 };
 const O = WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
