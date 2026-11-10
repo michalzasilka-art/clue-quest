@@ -657,3 +657,6 @@ body[data-screen="lobby"] .tok .bal { margin-bottom: calc(var(--hold, .25) * -10
 .flyer .fbal { margin-bottom: calc(var(--hold, .521) * -96px - 6px); }
 .flyer.pick .fbal { margin-bottom: calc(var(--hold, .521) * -72px - 4.5px); }
 .step .sbal { margin-bottom: calc(var(--hold, .496) * -9 * var(--u) - .54 * var(--u)); }
+/* every bunch of balloons leans in the wind gusts (--wind is set by ambient.js) */
+.tok .bal, .flyer .fbal, .sl-bal, .se-hero img:first-child, .step .sbal { rotate: calc(var(--wind, 0) * 8deg); transition: rotate .6s ease-out; }
+.se-hero img:first-child { transform-origin: 50% 100%; }
