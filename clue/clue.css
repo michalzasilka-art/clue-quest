@@ -665,3 +665,9 @@ body[data-screen="lobby"] .tok .bal { margin-bottom: calc(var(--hold, .25) * -10
 #qSkip { --bg: var(--slab); color: #fff; box-shadow: inset 0 0 0 2px var(--slabB), 0 4px 0 rgba(0, 0, 0, .35); }
 #tokens .tok .gain { left: 100%; top: 34%; transform: none; font-size: calc(1.5 * var(--u)); }
 #tokens .tok.rise .gain { animation: gainup2 2.4s ease-out .2s forwards; }
+/* climbing: no speed lines under the hero; the balloons lift and bob, the hero sways gently below them, floating */
+.tok::after, .tok.rise::after { content: none !important; display: none !important; }
+.tok.rise .bal { animation: floatbal 1.5s ease-in-out infinite alternate !important; }
+.tok.rise .hero { animation: floatswing 1.5s ease-in-out infinite alternate !important; transform-origin: 50% 0; }
+@keyframes floatbal { from { transform: translateY(1%) rotate(-3deg) scale(1); } to { transform: translateY(-3%) rotate(3deg) scale(1.03); } }
+@keyframes floatswing { from { transform: rotate(4deg) translateY(1%); } to { transform: rotate(-4deg) translateY(-2%); } }
