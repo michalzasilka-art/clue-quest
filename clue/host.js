@@ -3,8 +3,9 @@
 // automatically the answer with how many picked each word, then NEXT: everyone flies up by what they earned, name
 // tags on top, the biggest streak shown → next clue → podium. This browser is the game: players, heights, clock.
 import { $, $$, esc, shuffle, store, show, qrCanvas, confetti, ordinal } from './ui.js';
-import { world, W as WW, VH, WH, GROUND, TOPY, ZONES, zoneAt } from './world.js';
-import { HEROES, HATS, heroURL, heroFrame, artReady, balloonsURL, heroHold } from './sprites.js';
+import { world, W as WW, VH, WH, GROUND, TOPY, ZONES, zoneAt, zoneRanges, UP, MAPID, useMap } from './world.js';
+import { HEROES, HATS, heroURL, heroFrame, artReady, balloonsURL as skyBalloons, bubblesURL, heroHold } from './sprites.js';
+const balloonsURL = (...a) => (UP > 0 ? skyBalloons : bubblesURL)(...a);
 import { SETS, setById, parseCustom } from './words.js';
 import { hostGame } from './net.js';
 import { sfx, unlock, music, setMuted, isMuted } from './sound.js';
@@ -23,6 +24,7 @@ $('#app').innerHTML = `
   <div id="sets"></div>
   <div id="options">
     <div class="choice px" data-k="rounds"><span>QUESTIONS</span><button class="px" data-v="5">5</button><button class="px" data-v="10">10</button><button class="px" data-v="15">15</button><button class="px" data-v="0">ALL</button></div>
+    <div class="choice px" data-k="map"><span>MAP</span><button class="px" data-v="sky">SKY ▲</button><button class="px" data-v="sea">SEA ▼</button></div>
     <div class="choice px" data-k="secs"><span>SECONDS</span><button class="px" data-v="10">10</button><button class="px" data-v="20">20</button><button class="px" data-v="30">30</button></div>
     <button class="btn px green" id="create">CREATE GAME</button>
   </div>
@@ -84,7 +86,17 @@ const cam = world($('#world'));
 artReady.then(() => { setsHTML(); syncTokens(); });   // the painted heroes replace the small ones when they have loaded
 
 // ---------- settings ----------
-const prefs = store.get('clue-host', { set: 'animals', rounds: 10, secs: 20 });
+const prefs = Object.assign({ set: 'animals', rounds: 10, secs: 20, map: 'sky' }, store.get('clue-host', {}));
+// the map: the sky (fly up) or the sea (dive down); the phones are told which, so their backgrounds match
+// the camera's home: the sky's village at the bottom, or the sea's harbour where the heroes float
+function camHome(now) { if (UP > 0) cam.rest(now); else cam.look(GROUND - VH * .62, now); }
+function applyMap() {
+  useMap(prefs.map); drawRulerZones(); camHome(true);
+  $('#setup .sub').textContent = UP > 0 ? 'Read the clue, pick the word on your phone, and fly your balloons up to the North Star!' : 'Read the clue, pick the word on your phone, and dive down to the Sea Star at the bottom of the sea!';
+  $('#lobbyHint').innerHTML = UP > 0 ? 'PICK YOUR HERO AND HAT ON YOUR PHONE.<br>YOU WILL APPEAR HERE IN THE VILLAGE!' : 'PICK YOUR HERO AND HAT ON YOUR PHONE.<br>YOU WILL APPEAR HERE IN THE HARBOUR!';
+  if ($('#startBtn')) $('#startBtn').textContent = UP > 0 ? 'LIFT OFF' : 'DIVE!';
+  if (net) for (const p of players.values()) net.send(p.pid, { type: 'map', map: MAPID });
+}
 let custom = store.get('clue-mine', '');
 function setsHTML() {
   const cards = SETS.map((s) => `<button class="set px${prefs.set === s.id ? ' on' : ''}" data-id="${s.id}">${img(s.icon, s.hat)}<span><b>${esc(s.title)}</b><small>${s.level} · ${s.words.length} WORDS</small></span></button>`);
@@ -93,7 +105,7 @@ function setsHTML() {
   $('#sets').innerHTML = cards.join('');
 }
 function optsHTML() { for (const box of $$('.choice')) for (const b of $$('button', box)) b.classList.toggle('on', String(prefs[box.dataset.k]) === b.dataset.v); }
-setsHTML(); optsHTML();
+setsHTML(); optsHTML(); setTimeout(applyMap, 0);
 $('#sets').addEventListener('click', (e) => {
   const b = e.target.closest('.set'); if (!b) return;
   unlock(); sfx.pick();
@@ -103,7 +115,8 @@ $('#sets').addEventListener('click', (e) => {
 $('#options').addEventListener('click', (e) => {
   const b = e.target.closest('.choice button'); if (!b) return;
   unlock(); sfx.tap();
-  prefs[b.closest('.choice').dataset.k] = +b.dataset.v; store.set('clue-host', prefs); optsHTML();
+  const k = b.closest('.choice').dataset.k; prefs[k] = k === 'map' ? b.dataset.v : +b.dataset.v; store.set('clue-host', prefs); optsHTML();
+  if (k === 'map') applyMap();
 });
 function openMine() { $('#mineText').value = custom; $('#mineErr').textContent = ''; $('#mine').hidden = false; $('#mineText').focus(); }
 $('#mineCancel').onclick = () => { $('#mine').hidden = true; };
@@ -140,7 +153,7 @@ const balloonsFor = (p) => ({ n: 3 + Math.min(3, p.streak), gold: p.streak >= 3 
 
 function qMessage() {
   const r = rounds[qi];
-  return { type: 'q', n: qi + 1, total: rounds.length, desc: r.desc, opts: r.opts, left: Math.max(0, qDur - (performance.now() - qStart)), dur: qDur };
+  return { type: 'q', map: MAPID, n: qi + 1, total: rounds.length, desc: r.desc, opts: r.opts, left: Math.max(0, qDur - (performance.now() - qStart)), dur: qDur };
 }
 const meOf = (p) => ({ name: p.name, char: p.char, hat: p.hat, score: p.alt, alt: p.alt, streak: p.streak });
 function screenFor(pid) {
@@ -148,7 +161,7 @@ function screenFor(pid) {
   if (phase === 'q') return { ...qMessage(), me, got: answers.has(pid) ? answers.get(pid).choice : null };
   if (phase === 'results' || phase === 'fly') return { type: 'res', me, ...resultFor(pid) };
   if (phase === 'podium') return { type: 'end', me, place: placeOf(pid), of: players.size, score: p.alt };
-  return { type: 'wait', me, topic: topicTitle };
+  return { type: 'wait', me, topic: topicTitle, map: MAPID };
 }
 
 async function openGame() {
@@ -195,7 +208,7 @@ function goLobby() {
   phase = 'lobby'; qi = -1; pickRounds(); lastZone = ZONES[0][0];
   for (const p of players.values()) { p.alt = 0; p.shown = 0; p.streak = 0; p.best = 0; p.last = null; }
   $('#lobbyTopic').textContent = `${topicTitle} · ${rounds.length} clues · ${prefs.secs}s`;
-  show('lobby'); cam.look(WH - VH); refresh(); music(true);
+  show('lobby'); camHome(); refresh(); music(true);
   for (const p of players.values()) net.send(p.pid, screenFor(p.pid));
 }
 function refresh() {
@@ -237,7 +250,7 @@ function syncTokens() {
 const laneX = (lane) => 34 + ((lane * .618034) % 1) * 52;   // right of the panels on the left, left of the ruler
 function lobbyPos(p, i, n) {   // standing in the village square, in rows going back
   const cols = Math.min(n, n > 20 ? 12 : n > 10 ? 10 : 8), r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols);
-  return { x: 46 + (c - (inRow - 1) / 2) * (84 / cols) + (r % 2) * 3, y: GROUND - r * 14 };
+  return { x: 46 + (c - (inRow - 1) / 2) * (84 / cols) + (r % 2) * 3, y: GROUND - UP * r * 14 };
 }
 let frameN = 0, stageH = 1, barH = 0;
 cam.onFrame((camY, t) => {
@@ -271,13 +284,13 @@ cam.onFrame((camY, t) => {
 });
 
 // the altitude ruler on the right: the whole world, its zones, everyone's head at their height and the camera window
-$('#rulerZones').innerHTML = ZONES.map(([name, top], i) => `<div class="rz" style="top:${((ZONES[i + 1] ? ZONES[i + 1][1] : 0) / WH * 100).toFixed(2)}%;height:${((top - (ZONES[i + 1] ? ZONES[i + 1][1] : 0)) / WH * 100).toFixed(2)}%"><span>${name.toUpperCase()}</span></div>`).join('');
-$('#rulerView').style.height = (VH / WH * 100).toFixed(2) + '%';
+function drawRulerZones() { $('#rulerZones').innerHTML = zoneRanges().map(([name, y0, y1]) => `<div class="rz" style="top:${(y0 / WH * 100).toFixed(2)}%;height:${((y1 - y0) / WH * 100).toFixed(2)}%"><span>${esc(name)}</span></div>`).join(''); $('#rulerView').style.height = (VH / WH * 100).toFixed(2) + '%'; }
+drawRulerZones();
 function drawRulerHeads() {
   $('#rulerHeads').innerHTML = ranked().map((p, i) => `<img class="px-img rh${i === 0 && p.alt > 0 ? ' lead' : ''}" style="top:${(altY(p.shown) / WH * 100).toFixed(2)}%;left:${(i % 3) * 30}%" src="${heroURL(p.char, { hat: p.hat })}" alt="">`).join('');
 }
 // the camera keeps the highest flyer in view, under the panels at the top of the screen
-function lookAtLeader(now) { const r = ranked(); const y = r.length ? altY(Math.max(...r.map((p) => p.shown))) : GROUND; cam.look(y - VH * .8, now); }   // low enough that the balloons clear the clue panel at the top
+function lookAtLeader(now) { const r = ranked(); const y = r.length ? altY(Math.max(...r.map((p) => p.shown))) : GROUND; cam.look(y - VH * (UP > 0 ? .8 : .87), now); }   // heroes in the lower part, clear of the clue panel at the top   // low enough that the balloons clear the clue panel at the top
 
 $('#tokens').addEventListener('click', (e) => {
   if (phase !== 'lobby') return;
@@ -340,7 +353,7 @@ const gainFor = (t) => r5((50 + 50 * Math.max(0, 1 - t / qDur)) * climb);   // 5
 const streakBonus = (s) => (s >= 2 ? r5(10 * (Math.min(s, 5) - 1) * climb) : 0); // +10 … +40 m × climb
 function resultFor(pid) {
   const p = players.get(pid), r = rounds[qi] || rounds[rounds.length - 1], l = p.last || { none: true };
-  return { ok: !!l.ok, pts: (l.gain || 0) + (l.bonus || 0), gain: l.gain || 0, bonus: l.bonus || 0, none: !!l.none, word: r.word, score: p.alt, alt: p.alt, streak: p.streak, place: placeOf(pid), of: players.size, last: qi === rounds.length - 1, zone: zoneAt(altY(p.alt)) };
+  return { map: MAPID, ok: !!l.ok, pts: (l.gain || 0) + (l.bonus || 0), gain: l.gain || 0, bonus: l.bonus || 0, none: !!l.none, word: r.word, score: p.alt, alt: p.alt, streak: p.streak, place: placeOf(pid), of: players.size, last: qi === rounds.length - 1, zone: zoneAt(altY(p.alt)) };
 }
 function showResults() {
   if (phase !== 'q') return;
@@ -429,7 +442,7 @@ function podium() {
   for (const p of players.values()) net.send(p.pid, screenFor(p.pid));
 }
 $('#againBtn').onclick = () => {
-  sfx.tap(); phase = 'setup'; show('setup'); cam.look(WH - VH); $('#create').textContent = 'OPEN LOBBY';
+  sfx.tap(); phase = 'setup'; show('setup'); camHome(); $('#create').textContent = 'OPEN LOBBY';
   for (const p of players.values()) { p.alt = 0; p.shown = 0; p.streak = 0; net.send(p.pid, { type: 'wait', me: meOf(p), topic: '' }); }
 };
 
@@ -441,4 +454,4 @@ addEventListener('keydown', (e) => {
   const b = { setup: '#create', lobby: '#startBtn', results: '#resNext', fly: '#flyNext' }[phase];
   if (b && !$(b).disabled && $('#mine').hidden) $(b).click();
 });
-show('setup'); cam.look(WH - VH, true);
+show('setup'); camHome(true);

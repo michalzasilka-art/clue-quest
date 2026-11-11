@@ -336,6 +336,24 @@ export function balloonsURL(n = 3, gold = false, seed = 0, scale = 4) {
   });
   const url = c.toDataURL(); cache.set(key, url); return url;
 }
+// ---- bubbles instead of balloons on the sea map: a column of pixel bubbles rising (n of them, gold = a streak) ----
+const BUBBLE_SPOTS = [[10, 14, 3], [6, 8, 2], [14, 4, 2.5], [9, 1, 1.5], [16, 11, 1.5], [4, 15, 1.5]];
+export function bubblesURL(n = 3, gold = false, seed = 0, scale = 4) {
+  n = Math.max(1, Math.min(6, n));
+  const key = 'bub|' + n + '|' + gold + '|' + (seed % 3) + '|' + scale;
+  if (cache.has(key)) return cache.get(key);
+  const c = document.createElement('canvas'); c.width = 24 * scale; c.height = 24 * scale;
+  const g = c.getContext('2d'), s = scale;
+  BUBBLE_SPOTS.slice(0, n).forEach(([bx, by, r], i) => {
+    const x0 = bx + ((seed + i) % 3) - 1, ring = gold && i === 0 ? '#ffe27a' : '#dff6ff', fill = gold && i === 0 ? 'rgba(255,226,122,.35)' : 'rgba(150,220,255,.28)';
+    for (let y = -Math.ceil(r); y <= Math.ceil(r); y++) for (let x = -Math.ceil(r); x <= Math.ceil(r); x++) {
+      const d = Math.hypot(x, y); if (d > r + .4) continue;
+      g.fillStyle = d > r - .6 ? ring : fill; g.fillRect((x0 + x) * s, (by + y + 6) * s, s, s);
+    }
+    g.fillStyle = '#ffffff'; g.fillRect((x0 - Math.round(r / 2)) * s, (by - Math.round(r / 2) + 6) * s, s, s);
+  });
+  const url = c.toDataURL(); cache.set(key, url); return url;
+}
 function shade(hex) {
   const n = parseInt(hex.slice(1), 16), f = (v) => Math.round(v * .68);
   return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((v) => f(v).toString(16).padStart(2, '0')).join('');

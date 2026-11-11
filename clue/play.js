@@ -1,8 +1,9 @@
 // Clue Quest, a student's phone: game code (or straight in from the QR code) → hero, hat and name → wait → each
 // round read the clue and tap one of 3 words → right/wrong, metres climbed, streak bonus, height and place → final.
 import { $, $$, esc, store, show, ordinal } from './ui.js';
-import { phoneWorld } from './world.js';
-import { HEROES, HATS, heroURL, heroFrame, artReady, hatURL, balloonsURL, heroHold } from './sprites.js';
+import { phoneWorld, useMap, UP, MAPID } from './world.js';
+import { HEROES, HATS, heroURL, heroFrame, artReady, hatURL, balloonsURL as skyBalloons, bubblesURL, heroHold } from './sprites.js';
+const balloonsURL = (...a) => (UP > 0 ? skyBalloons : bubblesURL)(...a);
 import { joinGame, cleanCode } from './net.js';
 import { sfx, unlock } from './sound.js';
 
@@ -154,7 +155,7 @@ $('#meGo').onclick = async () => {
   const n = $('#nameIn').value.replace(/\s+/g, ' ').trim();
   if (!n) { $('#meErr').textContent = 'Type your name first.'; $('#nameIn').focus(); return; }
   me.name = n.slice(0, 14); save(); sfx.tap();
-  if (soloMode) { import('./solo.js?v=11').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
+  if (soloMode) { import('./solo.js?v=12').then((m) => m.startSolo(cam, me, (to) => { if (to === 'me') openMe(false); else openMenu(); })); return; }
   if (editing && game) { game.send({ type: 'look', name: me.name, char: me.char, hat: me.hat }); drawWait(); show('wait'); return; }
   connect();
 };
@@ -178,12 +179,14 @@ async function connect() {
   joining = false; $('#meGo').disabled = false; $('#rejoin').disabled = false;
   save(); sfx.join();
   history.replaceState(null, '', location.pathname + '?code=' + code);
+  game.on('map', mapOf); for (const ty of ['wait', 'q', 'res', 'end']) game.on(ty, mapOf);
   game.on('wait', onWait); game.on('q', onQ); game.on('got', onGot); game.on('res', onRes); game.on('end', onEnd);
   game.on('kicked', () => { game.close(); game = null; lost('The teacher removed you from this game.', true); });
   game.onLost(() => { game = null; lost('Lost the connection. Joining again…'); setTimeout(connect, 700); });
   route(game.first);
 }
-function route(m) { if (!m) return; ({ wait: onWait, q: onQ, res: onRes, end: onEnd }[m.type] || onWait)(m); }
+function mapOf(m) { if (m && m.map && m.map !== MAPID) { useMap(m.map); for (const w of ['pick', 'waiting', 'result', 'final']) drawFlyer(w); } }
+function route(m) { if (!m) return; mapOf(m); ({ wait: onWait, q: onQ, res: onRes, end: onEnd }[m.type] || onWait)(m); }
 function lost(msg, kicked) {
   clearInterval(tbarT);
   $('#lostMsg').textContent = msg; $('#rejoin').hidden = !!kicked;
@@ -273,7 +276,7 @@ $('#menuGo').onclick = () => {
   unlock(); sfx.tap();
   if (mode === 'board') { location.href = new URL('./?host', location.href).href; return; }
   // Individual: its own lobby (hero, hat, name, topic) in solo.js
-  import('./solo.js?v=11').then((m) => m.startSolo(cam, me, () => openMenu(), save));
+  import('./solo.js?v=12').then((m) => m.startSolo(cam, me, () => openMenu(), save));
 };
 $('#menuJoin').onclick = () => { unlock(); sfx.tap(); soloMode = false; codeIn.value = ''; drawDigits(); show('join'); };
 

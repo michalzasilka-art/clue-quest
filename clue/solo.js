@@ -4,9 +4,10 @@
 // droops and climbs, and the next clue comes by itself. The camera follows you up the painted map to 1500 m; at the
 // end you get a title for how high you flew and your best height is kept on this device.
 import { $, $$, esc, store, show, shuffle, confetti } from './ui.js';
-import { HEROES, HATS, heroURL, heroFrame, hatURL, balloonsURL, heroHold } from './sprites.js';
+import { HEROES, HATS, heroURL, heroFrame, hatURL, balloonsURL as skyBalloons, bubblesURL, heroHold } from './sprites.js';
 import { SETS } from './words.js';
-import { W, WH, GROUND, TOPY, ZONES, zoneAt } from './world.js';
+import { W, WH, GROUND, TOPY, ZONES, zoneAt, UP, MAPID, useMap } from './world.js';
+const balloonsURL = (...a) => (UP > 0 ? skyBalloons : bubblesURL)(...a);
 import { sfx, unlock } from './sound.js';
 
 const LETTERS = ['a', 'b', 'c'];
@@ -16,7 +17,9 @@ const r5 = (m) => Math.round(m / 5) * 5;
 const gainFor = (t) => r5((50 + 50 * Math.max(0, 1 - t / (SECS * 1000))) * CLIMB);
 const streakBonus = (s) => (s >= 2 ? r5(10 * (Math.min(s, 5) - 1) * CLIMB) : 0);
 const TITLES = [[1500, 'NORTH STAR HERO'], [1200, 'STAR CHASER'], [900, 'AURORA RIDER'], [600, 'CLOUD SURFER'], [300, 'PEAK EXPLORER'], [0, 'TREETOP FLYER']];
-const titleFor = (alt) => TITLES.find(([m]) => alt >= m)[1];
+const SEA_TITLES = [[1500, 'SEA STAR HERO'], [1200, 'DEEP DIVER'], [900, 'GLOW EXPLORER'], [600, 'KELP RIDER'], [300, 'ICE DIVER'], [0, 'HARBOUR SPLASHER']];
+const titleFor = (alt) => (UP > 0 ? TITLES : SEA_TITLES).find(([m]) => alt >= m)[1];
+const bestKey = () => (UP > 0 ? 'clue-best' : 'clue-best-sea');
 
 let built = false, cam = null, me = null, onExit = null, saveMe = null;
 let rounds = [], qi = 0, qStart = 0, timer = null, phase = 'off', topic = SETS[0], raf = 0;
@@ -36,6 +39,7 @@ function build() {
   <div class="sl-panel">
     <div class="sl-hats" id="slHats"></div>
     <input class="sl-input" id="slName" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="YOUR NAME">
+    <div class="sl-maps" id="slMaps"><button class="sl-map" data-map="sky">▲ SKY: FLY UP</button><button class="sl-map" data-map="sea">▼ SEA: DIVE DOWN</button></div>
     <div class="sl-topics" id="slTopics"></div>
     <p class="err" id="slErr"></p>
     <button class="btn px green" id="soloGo">BEGIN CLIMB</button>
@@ -64,11 +68,12 @@ function build() {
   document.body.insertAdjacentHTML('beforeend', `<div id="soloLayer" hidden>
   <div id="soloMe" class="tok mine"><span class="tag"></span><img class="px-img bal" alt=""><img class="px-img hero" alt=""><b class="gain"></b></div>
   <div id="soloRuler"><div class="rail"></div><div id="soloTicks"></div><div id="soloMark"><img class="px-img" alt=""><span></span></div></div></div>`);
-  $('#soloTicks').innerHTML = [0, 250, 500, 750, 1000, 1250, 1500].map((m) => `<div class="tick" style="top:${(altY(m) / WH * 100).toFixed(2)}%"><span>${m === 1500 ? '★' : m}</span></div>`).join('');
+  drawTicks();
   // lobby controls
   $('#slPrev').onclick = () => stepHero(-1);
   $('#slNext').onclick = () => stepHero(1);
   $('#slHats').addEventListener('click', (e) => { const b = e.target.closest('.sl-hat'); if (!b) return; unlock(); sfx.pop(); me.hat = b.dataset.id; drawLobby(true); });
+  $('#slMaps').addEventListener('click', (e) => { const b = e.target.closest('.sl-map'); if (!b) return; unlock(); sfx.pick(); useMap(b.dataset.map); store.set('clue-map', b.dataset.map); drawLobby(true); });
   $('#slTopics').addEventListener('click', (e) => { const b = e.target.closest('.sl-topic'); if (!b) return; unlock(); sfx.pick(); topic = SETS.find((s) => s.id === b.dataset.id); store.set('clue-solo-topic', topic.id); drawLobby(); });
   $('#slName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#slName').blur(); });
   $('#soloGo').onclick = () => {
@@ -89,6 +94,7 @@ function build() {
   $('#soloMenu').onclick = () => { sfx.tap(); openLobby(); };
   cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
 }
+function drawTicks() { $('#soloTicks').innerHTML = [0, 250, 500, 750, 1000, 1250, 1500].map((m) => `<div class="tick" style="top:${(altY(m) / WH * 100).toFixed(2)}%"><span>${m === 1500 ? '★' : m}</span></div>`).join(''); }
 function stepHero(d) {
   unlock(); sfx.pick();
   const i = HEROES.findIndex((h) => h.id === me.char);
@@ -104,8 +110,11 @@ function drawLobby(bounce) {
   $('#slHats').innerHTML = HATS.map((t) => `<button class="sl-hat${t.id === me.hat ? ' on' : ''}" data-id="${t.id}" title="${esc(t.name)}"><img class="px-img" src="${hatURL(t.id)}" alt="${esc(t.name)}"></button>`).join('');
   $('#slTopics').innerHTML = SETS.map((s) => `<button class="sl-topic${s.id === topic.id ? ' on' : ''}" data-id="${s.id}">${esc(s.title)}</button>`).join('');
   const on = $('#slTopics .on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' });
-  const best = store.get('clue-best', 0);
-  $('#slBest').textContent = best ? `BEST ${best} m · ${titleFor(best)}` : 'NORTH STAR AT 1500 m';
+  const best = store.get(bestKey(), 0);
+  $('#slBest').textContent = best ? `BEST ${best} m · ${titleFor(best)}` : UP > 0 ? 'NORTH STAR AT 1500 m' : 'SEA STAR AT 1500 m';
+  $$('#slMaps .sl-map').forEach((b) => b.classList.toggle('on', b.dataset.map === MAPID));
+  $('.solo-lobby .tagline').textContent = UP > 0 ? 'THE BALLOON CLIMB' : 'THE DEEP SEA DIVE';
+  $('#soloGo').textContent = UP > 0 ? 'BEGIN CLIMB' : 'BEGIN DIVE';
   if (bounce) { const s = $('.sl-hero'); s.classList.remove('boing'); void s.offsetWidth; s.classList.add('boing'); }
 }
 
@@ -113,6 +122,7 @@ function drawLobby(bounce) {
 export function startSolo(world, player, exit, save) {
   cam = world; me = player; onExit = exit; saveMe = save; build();
   topic = SETS.find((s) => s.id === store.get('clue-solo-topic')) || SETS[0];
+  useMap(store.get('clue-map', 'sky'));
   openLobby();
 }
 function openLobby() {
@@ -129,10 +139,10 @@ function begin() {
   $('#soloMe .tag').textContent = me.name;
   $('#soloMe').style.setProperty('--hold', heroHold(me.char).toFixed(3));
   $('#soloMark img').src = heroURL(me.char, { hat: me.hat });
-  drawBalloons();
+  drawBalloons(); drawTicks();
   $('#soloLayer').hidden = false; $('#soloStreak').hidden = true;
   show('soloGame'); phase = 'intro';
-  cam.look(altY(0) - cam.viewH * .95, true);
+  cam.look(UP > 0 ? altY(0) - cam.viewH * .95 : altY(0) - cam.viewH * .56, true);
   setTimeout(() => ask(0), 700);
 }
 function drawBalloons() { $('#soloMe .bal').src = balloonsURL(3 + Math.min(3, P.streak), P.streak >= 3, 2); $('#soloMe').classList.toggle('hot', P.streak >= 3); }
@@ -147,9 +157,9 @@ function loop(t) {
   }
   if (phase === 'off' || phase === 'end') return;
   const vw = cam.viewW, vh = cam.viewH, x0 = (W - vw) / 2, wide = innerWidth > innerHeight * 1.1;
-  const hover = vh * .62;                                   // you hang this far above your height line, clear of the answers
+  const hover = UP > 0 ? vh * .62 : 0;                      // sky: you hang this far above your height line, clear of the answers
   const y = altY(P.shown) - hover - 4 * Math.sin(t / 1000);
-  cam.look(altY(P.shown) - hover - vh * (wide ? .64 : .5));   // feet half-way down a phone, lower on a wide screen so the balloons clear the top bar
+  cam.look(altY(P.shown) - hover - vh * (UP > 0 ? (wide ? .64 : .5) : (wide ? .6 : .56)));   // sea: you dive around the middle, the deep below you   // feet half-way down a phone, lower on a wide screen so the balloons clear the top bar
   const sx = wide ? 26 : 22, el = $('#soloMe');
   // on a fast climb the camera lags behind: keep the whole hero (balloons and name too) below the top bar meanwhile
   const minTop = Math.min(.6, (el.offsetHeight + 58) / innerHeight);
@@ -217,7 +227,7 @@ function climb() {
     $('#soloAlt').textContent = P.shown + ' m';
     if (k < 1) { requestAnimationFrame(step); return; }
     el.classList.remove('rise');
-    const z = zoneAt(altY(P.alt) - 40);
+    const z = zoneAt(altY(P.alt) - 40 * UP);
     if (z !== P.zone) { P.zone = z; banner(`WELCOME TO THE ${z.toUpperCase()}`); }
     if (qi + 1 < ROUNDS) setTimeout(() => ask(qi + 1), 700); else setTimeout(finish, 900);
   };
@@ -227,7 +237,7 @@ function banner(text) { const b = $('#soloBanner'); b.textContent = text; b.hidd
 
 function finish() {
   phase = 'end';
-  const best = Math.max(store.get('clue-best', 0), P.alt), newBest = P.alt > store.get('clue-best', 0); store.set('clue-best', best);
+  const best = Math.max(store.get(bestKey(), 0), P.alt), newBest = P.alt > store.get(bestKey(), 0); store.set(bestKey(), best);
   $('#seHeight').textContent = P.alt + ' m';
   $('#seTitle').textContent = titleFor(P.alt);
   $('#seHero').src = heroURL(me.char, { hat: me.hat, frame: P.alt ? 3 : 0, scale: 6 });
@@ -235,7 +245,8 @@ function finish() {
   $('#seBal').src = balloonsURL(3 + Math.min(3, P.best), P.best >= 3, 2, 6);
   $('#seRight').textContent = `${P.right}/${ROUNDS}`;
   $('#seBest').textContent = best + ' m';
-  $('#seZone').textContent = P.alt >= TOP_ALT ? 'You reached the North Star!' : `You flew up to the ${zoneAt(altY(P.alt))}.` + (newBest ? ' A new best!' : '');
+  $('.se-label').textContent = UP > 0 ? 'YOU FLEW TO' : 'YOU DIVED TO';
+  $('#seZone').textContent = P.alt >= TOP_ALT ? (UP > 0 ? 'You reached the North Star!' : 'You reached the Sea Star!') : `${UP > 0 ? 'You flew up to the' : 'You dived down to the'} ${zoneAt(altY(P.alt))}.` + (newBest ? ' A new best!' : '');
   $('#soloLayer').hidden = true;
   show('soloEnd');
   if (newBest || P.alt >= TOP_ALT) { sfx.fanfare(); confetti(4000); } else sfx.right();

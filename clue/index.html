@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@500;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="clue.css?v=15">
+<link rel="stylesheet" href="clue.css?v=16">
 <script src="lib/qrcode.js"></script>
 </head>
 <body>
@@ -23,7 +23,7 @@
   // /clue/host (or ?host) is the teacher's big screen; /clue/ (and the QR code, /clue/?code=123456) is a student's phone
   const host = /\/host(\.html)?\/?$/.test(location.pathname) || new URLSearchParams(location.search).has('host');
   document.body.classList.add(host ? 'is-host' : 'is-player');
-  import(host ? './host.js?v=13' : './play.js?v=12');
+  import(host ? './host.js?v=15' : './play.js?v=12');
 </script>
 </body>
 </html>

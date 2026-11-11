@@ -671,3 +671,17 @@ body[data-screen="lobby"] .tok .bal { margin-bottom: calc(var(--hold, .25) * -10
 .tok.rise .hero { animation: floatswing 1.5s ease-in-out infinite alternate !important; transform-origin: 50% 0; }
 @keyframes floatbal { from { transform: translateY(1%) rotate(-3deg) scale(1); } to { transform: translateY(-3%) rotate(3deg) scale(1.03); } }
 @keyframes floatswing { from { transform: rotate(4deg) translateY(1%); } to { transform: rotate(-4deg) translateY(-2%); } }
+
+/* =================================== the sea map: dive down head first =================================== */
+body.map-sea #soloMe .hero, body.map-sea:not([data-screen="lobby"]) .tok .hero { scale: 1 -1; }
+body.map-sea #soloMe .bal, body.map-sea .tok .bal, body.map-sea .sl-bal, body.map-sea .flyer .fbal, body.map-sea .se-hero img:first-child, body.map-sea .step .sbal {
+  margin-bottom: -4% !important; rotate: 0deg !important; animation: bubblerise 1.8s ease-in-out infinite alternate !important; }
+body.map-sea[data-screen="lobby"] .tok .bal { margin-bottom: -16% !important; }
+@keyframes bubblerise { from { transform: translateY(4%); } to { transform: translateY(-6%); } }
+body.map-sea #soloMe.rise .hero, body.map-sea .tok.rise .hero { animation: swimdown .7s ease-in-out infinite alternate !important; }
+@keyframes swimdown { from { transform: rotate(-6deg) translateY(0); } to { transform: rotate(6deg) translateY(3%); } }
+body.map-sea #soloRuler .rail, body.map-sea #ruler .rail { background: linear-gradient(#ffd0e8, #9fdcff 6%, #3aa8d8 18%, #1a7cc2 36%, #104e98 54%, #0a2c6a 70%, #081c48 88%, #ffd86a); }
+.sl-maps { display: flex; gap: 6px; }
+.sl-map { flex: 1; font: 700 10px var(--s); letter-spacing: .12em; color: #eef2ff; background: var(--slab); box-shadow: inset 0 0 0 2px var(--slabB); padding: 10px 6px 8px; }
+.sl-map.on { background: var(--cyan); color: #0e1430; box-shadow: inset 0 0 0 2px #fff, 0 0 10px rgba(94, 232, 244, .8); }
+.sl-map[data-map="sea"].on { background: #3aa8d8; color: #fff; }

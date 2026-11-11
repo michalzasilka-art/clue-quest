@@ -11,15 +11,35 @@
 // built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 2 px per world unit.
 // 0 m at the forest floor up to 1500 m at the North Star.
 import { createAmbient } from './ambient.js?v=15';
-export const W = 320, VH = 180, WH = 2417;
+import { seaScene } from './sea.js?v=1';
+import { SEA } from './art/sea-meta.js?v=2';
+const SKY_WH = 2417;
+export const W = 320, VH = 180;
+export let WH = SKY_WH;
 const MAP = { slices: 7, slicePx: 800, heightPx: 4834, pxPerUnit: 2 };
-const O = WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
-export const GROUND = WH - 20;       // where the heroes stand in the village
-export const TOPY = 56;              // the North Star in the painted sky: the top of the flight (1500 m)
-export const ZONES = [               // [name, the zone starts above this y]
-  ['Snowy Forest', WH], ['Treetops', 2203], ['Snowy Peaks', 1800], ['Cloud Sea', 1350], ['Aurora Sky', 900], ['Starry Night', 450], ['North Star', 130]];
-export const zoneAt = (y) => { let z = ZONES[0][0]; for (const [n, top] of ZONES) if (y < top) z = n; return z; };
-let GTOP = WH - 370;                 // the ground picture covers y GTOP … WH (the painted forest: WH − 213)
+const O = SKY_WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
+// The two maps. These exports are live: useMap('sky' | 'sea') swaps them, and every module that imported them sees
+// the new values. 'sky': 0 m at the forest floor (GROUND, the bottom) up to 1500 m at the North Star (TOPY, the top).
+// 'sea': 0 m just under the frozen harbour's surface (GROUND, the top) down to 1500 m at the Sea Star (TOPY, the
+// bottom). UP is 1 on the sky map, -1 on the sea map; ZONES are [name, y] where a zone begins, in the order you meet them.
+const SKY_ZONES = [['Snowy Forest', SKY_WH], ['Treetops', 2203], ['Snowy Peaks', 1800], ['Cloud Sea', 1350], ['Aurora Sky', 900], ['Starry Night', 450], ['North Star', 130]];
+export let MAPID = 'sky', UP = 1, GROUND = SKY_WH - 20, TOPY = 56, ZONES = SKY_ZONES;
+export const zoneAt = (y) => { let z = ZONES[0][0]; for (const [n, top] of ZONES) if (UP > 0 ? y < top : y >= top) z = n; return z; };
+// each zone as [name, y0, y1] from the top of the world to the bottom (for the height rulers)
+export const zoneRanges = () => {
+  if (UP > 0) return ZONES.map(([n, top], i) => [n, ZONES[i + 1] ? ZONES[i + 1][1] : 0, top]).reverse();
+  return ZONES.map(([n, top], i) => [n, top, ZONES[i + 1] ? ZONES[i + 1][1] : WH]);
+};
+const cams = [];
+export function useMap(id) {
+  id = id === 'sea' ? 'sea' : 'sky';
+  if (id === 'sea') { MAPID = 'sea'; UP = -1; WH = SEA.wh; GROUND = SEA.surface + 16; TOPY = SEA.star; ZONES = SEA.zones; }
+  else { MAPID = 'sky'; UP = 1; WH = SKY_WH; GROUND = SKY_WH - 20; TOPY = 56; ZONES = SKY_ZONES; }
+  document.body.classList.toggle('map-sea', id === 'sea'); document.body.classList.toggle('map-sky', id !== 'sea');
+  if (id === 'sea') document.documentElement.style.setProperty('--wind', 0);
+  for (const c of cams) c.setMap(id);
+}
+let GTOP = SKY_WH - 370;                 // the ground picture covers y GTOP … SKY_WH (the painted forest: SKY_WH − 213)
 
 function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const lerp = (a, b, f) => a + (b - a) * f;
@@ -84,42 +104,42 @@ function cabin(g, x, y, w, h) {
   return { chimney: { x: x + w * .68 + 1.5, y: y - h - w * .37 }, eave: { x0: x - 3, x1: x + w + 3, y: y - h + 1 } };
 }
 function buildGround(s) {
-  const H = WH - GTOP, c = document.createElement('canvas'); c.width = Math.round(W * s); c.height = Math.round(H * s);
+  const H = SKY_WH - GTOP, c = document.createElement('canvas'); c.width = Math.round(W * s); c.height = Math.round(H * s);
   const g = c.getContext('2d'); g.scale(s, s); g.translate(0, -GTOP);
   const rand = rng(5);
   // far mountains, soft lavender, with snow caps
   const ridge = (base, amp, seed, col, cap) => {
     const r = rng(seed); const pts = []; for (let x = -10; x <= W + 10; x += 22) pts.push([x, base - amp * (.4 + r() * .6)]);
     const mg = g.createLinearGradient(0, base - amp, 0, base + 40); mg.addColorStop(0, col[0]); mg.addColorStop(1, col[1]);
-    g.fillStyle = mg; g.beginPath(); g.moveTo(-10, WH);
+    g.fillStyle = mg; g.beginPath(); g.moveTo(-10, SKY_WH);
     pts.forEach(([x, y], i) => { if (!i) g.lineTo(x, y); else { const [px, py] = pts[i - 1]; g.quadraticCurveTo(px + 11, Math.min(py, y) - amp * .15, x, y); } });
-    g.lineTo(W + 10, WH); g.fill();
+    g.lineTo(W + 10, SKY_WH); g.fill();
     if (cap) { g.fillStyle = cap; pts.forEach(([x, y], i) => { if (i && i < pts.length - 1 && y < base - amp * .6) { const top = Math.min(pts[i - 1][1], y) - amp * .15 * .5; g.beginPath(); g.moveTo(x - 9, y + 4); g.quadraticCurveTo(x - 4, top - 1, x, y - 1); g.quadraticCurveTo(x + 4, top, x + 9, y + 5); g.quadraticCurveTo(x + 3, y + 1, x, y + 4); g.quadraticCurveTo(x - 4, y + 1, x - 9, y + 4); g.fill(); } }); }
   };
-  ridge(WH - 100, 36, 3, ['#c6c2ea', '#a3a8dc'], 'rgba(255,255,255,.9)');
-  ridge(WH - 90, 22, 9, ['#a4a9e0', '#8890cc'], 'rgba(250,250,255,.85)');
+  ridge(SKY_WH - 100, 36, 3, ['#c6c2ea', '#a3a8dc'], 'rgba(255,255,255,.9)');
+  ridge(SKY_WH - 90, 22, 9, ['#a4a9e0', '#8890cc'], 'rgba(250,250,255,.85)');
   const hill = (base, amp, k, ph, top, bot) => {
-    const gr = g.createLinearGradient(0, base - amp, 0, WH); gr.addColorStop(0, top); gr.addColorStop(1, bot);
-    g.fillStyle = gr; g.beginPath(); g.moveTo(0, WH);
+    const gr = g.createLinearGradient(0, base - amp, 0, SKY_WH); gr.addColorStop(0, top); gr.addColorStop(1, bot);
+    g.fillStyle = gr; g.beginPath(); g.moveTo(0, SKY_WH);
     for (let x = 0; x <= W; x += 4) g.lineTo(x, base - amp * (.5 + .5 * Math.sin(x / k + ph)));
-    g.lineTo(W, WH); g.fill();
+    g.lineTo(W, SKY_WH); g.fill();
   };
-  hill(WH - 88, 26, 38, .4, '#e6ecff', '#b9c6ee');
-  for (let i = 0; i < 22; i++) { const x = rand() * W; pineTree(g, x, WH - 80 - 13 * (.5 + .5 * Math.sin(x / 38 + .4)) + 6, 10 + rand() * 9, '#1c4f42'); }
-  hill(WH - 62, 18, 27, 2.1, '#f4f7ff', '#cdd8f6');
-  for (let i = 0; i < 12; i++) { const x = rand() * W; pineTree(g, x, WH - 60 - 9 * (.5 + .5 * Math.sin(x / 27 + 2.1)) + 6, 14 + rand() * 10); }
-  const gr = g.createLinearGradient(0, WH - 46, 0, WH); gr.addColorStop(0, '#f6f8ff'); gr.addColorStop(1, '#dce4fb');
-  g.fillStyle = gr; g.fillRect(0, WH - 46, W, 46);
+  hill(SKY_WH - 88, 26, 38, .4, '#e6ecff', '#b9c6ee');
+  for (let i = 0; i < 22; i++) { const x = rand() * W; pineTree(g, x, SKY_WH - 80 - 13 * (.5 + .5 * Math.sin(x / 38 + .4)) + 6, 10 + rand() * 9, '#1c4f42'); }
+  hill(SKY_WH - 62, 18, 27, 2.1, '#f4f7ff', '#cdd8f6');
+  for (let i = 0; i < 12; i++) { const x = rand() * W; pineTree(g, x, SKY_WH - 60 - 9 * (.5 + .5 * Math.sin(x / 27 + 2.1)) + 6, 14 + rand() * 10); }
+  const gr = g.createLinearGradient(0, SKY_WH - 46, 0, SKY_WH); gr.addColorStop(0, '#f6f8ff'); gr.addColorStop(1, '#dce4fb');
+  g.fillStyle = gr; g.fillRect(0, SKY_WH - 46, W, 46);
   const chimneys = [], eaves = [];
-  for (const [x, w, h] of [[10, 24, 13], [44, 19, 11], [92, 26, 14], [262, 22, 12], [292, 18, 10]]) { const cb = cabin(g, x, WH - 40, w, h); chimneys.push(cb.chimney); eaves.push(cb.eave); }
-  for (const x of [38, 70, 124, 150, 286]) pineTree(g, x, WH - 38, 18 + (x % 7));
-  const pg = g.createLinearGradient(0, WH - 26, 0, WH - 14); pg.addColorStop(0, '#9fd2f6'); pg.addColorStop(1, '#6fb0e6');
-  g.fillStyle = pg; g.beginPath(); g.ellipse(70, WH - 20, 26, 6, 0, 0, 7); g.fill();
-  g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = .6; g.beginPath(); g.moveTo(54, WH - 21); g.lineTo(66, WH - 23); g.moveTo(74, WH - 18); g.lineTo(86, WH - 20); g.stroke();
-  [[124, WH - 18, 5], [124, WH - 26, 4], [124, WH - 32.5, 3]].forEach(([x, y, r]) => puff(g, x, y, r, '#ffffff', '#c8d4f2'));
-  g.fillStyle = '#1d1430'; g.fillRect(121, WH - 37, 6, 1); g.fillRect(122, WH - 41, 4, 4); g.fillStyle = '#ff8a3a'; g.beginPath(); g.moveTo(124, WH - 32.5); g.lineTo(128, WH - 32); g.lineTo(124, WH - 31.5); g.fill();
-  g.fillStyle = '#d83a4a'; g.fillRect(121, WH - 29.5, 6, 1.4);
-  const tx = 214, ty = WH - 16;
+  for (const [x, w, h] of [[10, 24, 13], [44, 19, 11], [92, 26, 14], [262, 22, 12], [292, 18, 10]]) { const cb = cabin(g, x, SKY_WH - 40, w, h); chimneys.push(cb.chimney); eaves.push(cb.eave); }
+  for (const x of [38, 70, 124, 150, 286]) pineTree(g, x, SKY_WH - 38, 18 + (x % 7));
+  const pg = g.createLinearGradient(0, SKY_WH - 26, 0, SKY_WH - 14); pg.addColorStop(0, '#9fd2f6'); pg.addColorStop(1, '#6fb0e6');
+  g.fillStyle = pg; g.beginPath(); g.ellipse(70, SKY_WH - 20, 26, 6, 0, 0, 7); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = .6; g.beginPath(); g.moveTo(54, SKY_WH - 21); g.lineTo(66, SKY_WH - 23); g.moveTo(74, SKY_WH - 18); g.lineTo(86, SKY_WH - 20); g.stroke();
+  [[124, SKY_WH - 18, 5], [124, SKY_WH - 26, 4], [124, SKY_WH - 32.5, 3]].forEach(([x, y, r]) => puff(g, x, y, r, '#ffffff', '#c8d4f2'));
+  g.fillStyle = '#1d1430'; g.fillRect(121, SKY_WH - 37, 6, 1); g.fillRect(122, SKY_WH - 41, 4, 4); g.fillStyle = '#ff8a3a'; g.beginPath(); g.moveTo(124, SKY_WH - 32.5); g.lineTo(128, SKY_WH - 32); g.lineTo(124, SKY_WH - 31.5); g.fill();
+  g.fillStyle = '#d83a4a'; g.fillRect(121, SKY_WH - 29.5, 6, 1.4);
+  const tx = 214, ty = SKY_WH - 16;
   for (let k = 0; k < 4; k++) {
     const yy = ty - 52 + k * 11, tw = 7 + k * 6;
     const tg = g.createLinearGradient(tx - tw, 0, tx + tw, 0); tg.addColorStop(0, '#2f8a62'); tg.addColorStop(1, '#16503c');
@@ -127,7 +147,7 @@ function buildGround(s) {
   }
   g.fillStyle = '#5a3a2a'; g.fillRect(tx - 2, ty - 4, 4, 4);
   [['#d83a4a', -16], ['#4a8aff', 11], ['#3ac85a', -6]].forEach(([col, dx]) => { g.fillStyle = col; g.fillRect(tx + dx, ty - 4, 6, 5); g.fillStyle = '#ffd24a'; g.fillRect(tx + dx + 2.5, ty - 4, 1, 5); });
-  const lamps = [[30, WH - 30], [86, WH - 28], [176, WH - 26], [250, WH - 28]].map(([x, y]) => { g.fillStyle = '#2a2440'; g.fillRect(x - .5, y - 12, 1, 12); g.fillRect(x - 1.5, y - 14, 3, 2); return { x, y: y - 13 }; });
+  const lamps = [[30, SKY_WH - 30], [86, SKY_WH - 28], [176, SKY_WH - 26], [250, SKY_WH - 28]].map(([x, y]) => { g.fillStyle = '#2a2440'; g.fillRect(x - .5, y - 12, 1, 12); g.fillRect(x - 1.5, y - 14, 3, 2); return { x, y: y - 13 }; });
   return { canvas: c, chimneys, eaves, lamps, tree: { x: tx, y: ty } };
 }
 function hotAirBalloon(g, x, y, r, a, b) {
@@ -147,6 +167,7 @@ function hotAirBalloon(g, x, y, r, a, b) {
 // ---------- the scene ----------
 function scene(canvas, { viewW, phone }) {
   const g = canvas.getContext('2d');
+  let on = true;
   const rand = rng(17);
   let s = 4, vw = viewW || W, vh = VH, ground = null, free = false;
   const clouds = [];
@@ -165,7 +186,7 @@ function scene(canvas, { viewW, phone }) {
   const flakes = Array.from({ length: 160 }, () => ({ x: rand() * W, y: rand(), v: .25 + rand() * .45, d: rand() * 6, r: .3 + rand() * .9 }));
   const birds = Array.from({ length: 9 }, (_, i) => ({ x: rand() * W, y: 1560 + O + (i % 3) * 70 + rand() * 30, v: .12 + rand() * .1, p: rand() * 6 }));
   const balloons = [[60, 1640, 9, '#ff5a6a', '#ffd24a'], [250, 1560, 7, '#4a8aff', '#ffffff'], [150, 1720, 6, '#3ac85a', '#ffd24a'], [290, 1880, 5, '#a86aff', '#ff8ad8']].map(([x, y, r, a, b]) => ({ x, y: y + O, r, a, b, v: .04 + r * .004 }));
-  let camY = WH - VH, target = camY, onFrame = null, shoot = null;
+  let camY = SKY_WH - VH, target = camY, onFrame = null, shoot = null;
   const amb = createAmbient({ big: !phone });   // the class board's effects are drawn bigger, to read from the back row
   // the painted map, in slices; until every slice is in, the drawn sky and village show instead
   const slices = Array(MAP.slices).fill(null); let painted = false; const forestSky = null;
@@ -183,15 +204,15 @@ function scene(canvas, { viewW, phone }) {
     canvas.width = cw; canvas.height = ch; g.imageSmoothingEnabled = false;
     s = px; vh = ch / s;
     ground = buildGround(2);
-    if (phone && !free) camY = target = WH - vh;
+    if (phone && !free) camY = target = SKY_WH - vh;
   }
-  fit(); addEventListener('resize', fit);
+  fit(); addEventListener('resize', () => { if (on) fit(); });
   const x0 = () => (W - vw) / 2;   // the phone shows the middle of the world
   const X = (x) => (x - x0()) * s, Y = (y) => (y - camY) * s;
   let last = 0;
   function frame(t) {
     requestAnimationFrame(frame);
-    if (t - last < 30) return; last = t;
+    if (!on || t - last < 30) return; last = t;
     camY += (target - camY) * .07; if (Math.abs(target - camY) < .05) camY = target;
     const cw = canvas.width, ch = canvas.height;
     const sk = g.createLinearGradient(0, 0, 0, ch);
@@ -299,17 +320,17 @@ function scene(canvas, { viewW, phone }) {
       const f = Math.sin(t / 160 + bd.p) * 2.2, x = X(bd.x), y = Y(bd.y + Math.sin(t / 900 + bd.p) * 2), u = s * .5;
       g.beginPath(); g.moveTo(x - 4 * u, y - f * u); g.quadraticCurveTo(x - 1.5 * u, y - 1 * u, x, y); g.quadraticCurveTo(x + 1.5 * u, y - 1 * u, x + 4 * u, y - f * u); g.stroke();
     }
-    if (painted && camY + vh > WH - 230) {
+    if (painted && camY + vh > SKY_WH - 230) {
       g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
       g.imageSmoothingEnabled = false;
       // soft glints drifting over the snow
       for (let k = 0; k < 14; k++) {
-        const gx = (k * 47 + t / 90 * (k % 3 + 1)) % W, gy = WH - 20 - ((k * 31) % 90) - 6 * Math.sin(t / 900 + k);
+        const gx = (k * 47 + t / 90 * (k % 3 + 1)) % W, gy = SKY_WH - 20 - ((k * 31) % 90) - 6 * Math.sin(t / 900 + k);
         g.globalAlpha = .5 + .5 * Math.sin(t / 400 + k * 2); g.fillStyle = k % 4 ? '#ffffff' : '#ffe9a8'; g.fillRect(Math.round(X(gx)), Math.round(Y(gy)), 1, 1);
       }
       g.globalAlpha = 1;
     } else if (camY + vh > GTOP) {
-      g.drawImage(ground.canvas, X(0), Y(GTOP), W * s, (WH - GTOP) * s);
+      g.drawImage(ground.canvas, X(0), Y(GTOP), W * s, (SKY_WH - GTOP) * s);
       const cols = ['#ff4a5a', '#ffd24a', '#4aee7a', '#5aa8ff', '#ff8ad8'];
       for (const [i, e] of ground.eaves.entries()) for (let x = e.x0; x < e.x1; x += 3) { const on = Math.sin(t / 300 + x + i) > -.2; g.fillStyle = cols[((x | 0) + i) % 5]; g.globalAlpha = on ? 1 : .35; g.beginPath(); g.arc(X(x), Y(e.y + 1), .9 * s * .5, 0, 7); g.fill(); }
       g.globalAlpha = 1;
@@ -338,15 +359,31 @@ function scene(canvas, { viewW, phone }) {
   requestAnimationFrame(frame);
   const api = {
     get y() { return camY; },
-    look(y, now) { free = true; target = Math.max(0, Math.min(WH - vh, y)); if (now) camY = target; },
-    rest(now) { free = false; target = WH - vh; if (now) camY = target; },   // back to the ground (phones)
+    look(y, now) { free = true; target = Math.max(0, Math.min(SKY_WH - vh, y)); if (now) camY = target; },
+    rest(now) { free = false; target = SKY_WH - vh; if (now) camY = target; },   // back to the ground (phones)
     get viewH() { return vh; }, get viewW() { return vw; },
     onFrame(fn) { onFrame = fn; },
     get wind() { return amb.wind; },
+    get on() { return on; }, set on(v) { on = v; if (v) { fit(); last = 0; } },
   };
   (window.CQW ||= []).push({ api, amb });   // for testing in the browser console
   return api;
 }
 
-export function world(canvas) { return scene(canvas, { viewW: W }); }
-export function phoneWorld(canvas) { return scene(canvas, { phone: true }); }
+// one camera for the page that shows whichever map is chosen (each map's scene is made the first time it is needed)
+function camera(canvas, opts) {
+  const scenes = {}; let cur = null, handler = null;
+  const get = (id) => { if (!scenes[id]) { scenes[id] = id === 'sea' ? seaScene(canvas, opts) : scene(canvas, opts); scenes[id].on = false; if (handler) scenes[id].onFrame(handler); } return scenes[id]; };
+  const c = {
+    setMap(id) { const next = get(id); if (next === cur) return; if (cur) cur.on = false; cur = next; cur.on = true; cur.rest(true); },
+    get y() { return cur.y; }, get viewH() { return cur.viewH; }, get viewW() { return cur.viewW; },
+    look(y, now) { cur.look(y, now); }, rest(now) { cur.rest(now); },
+    onFrame(fn) { handler = fn; for (const sc of Object.values(scenes)) sc.onFrame(fn); },
+    get wind() { return cur.wind; }, burst(x, y, n) { if (cur.burst) cur.burst(x, y, n); },
+    get map() { return MAPID; },
+  };
+  c.setMap(MAPID); cams.push(c);
+  return c;
+}
+export function world(canvas) { return camera(canvas, { viewW: W }); }
+export function phoneWorld(canvas) { return camera(canvas, { phone: true }); }
