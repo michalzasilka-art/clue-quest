@@ -10,7 +10,7 @@
 // The map: one painted picture 640 × 4834 px (five ChatGPT sky pictures and the snowy forest clearing, cross-faded;
 // built by Clue Quest/Backgrounds/compose_map.py), loaded in seven slices art/map-0…6.webp, 2 px per world unit.
 // 0 m at the forest floor up to 1500 m at the North Star.
-import { createAmbient } from './ambient.js?v=13';
+import { createAmbient } from './ambient.js?v=15';
 export const W = 320, VH = 180, WH = 2417;
 const MAP = { slices: 7, slicePx: 800, heightPx: 4834, pxPerUnit: 2 };
 const O = WH - 2160;                 // the drawn fallback sky was laid out for a 2160-tall world
@@ -166,7 +166,7 @@ function scene(canvas, { viewW, phone }) {
   const birds = Array.from({ length: 9 }, (_, i) => ({ x: rand() * W, y: 1560 + O + (i % 3) * 70 + rand() * 30, v: .12 + rand() * .1, p: rand() * 6 }));
   const balloons = [[60, 1640, 9, '#ff5a6a', '#ffd24a'], [250, 1560, 7, '#4a8aff', '#ffffff'], [150, 1720, 6, '#3ac85a', '#ffd24a'], [290, 1880, 5, '#a86aff', '#ff8ad8']].map(([x, y, r, a, b]) => ({ x, y: y + O, r, a, b, v: .04 + r * .004 }));
   let camY = WH - VH, target = camY, onFrame = null, shoot = null;
-  const amb = createAmbient();
+  const amb = createAmbient({ big: !phone });   // the class board's effects are drawn bigger, to read from the back row
   // the painted map, in slices; until every slice is in, the drawn sky and village show instead
   const slices = Array(MAP.slices).fill(null); let painted = false; const forestSky = null;
   slices.forEach((_, i) => { const im = new Image(); im.onload = () => { slices[i] = im; painted = slices.every(Boolean); }; im.src = new URL(`art/map-${i}.webp?v=2`, import.meta.url).href; });

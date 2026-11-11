@@ -213,7 +213,7 @@ const toks = new Map();   // pid → { el, bal, hero, tag, key }
 function syncTokens() {
   for (const [pid, t] of toks) if (!players.has(pid)) { t.el.remove(); toks.delete(pid); }
   const n = Math.max(1, players.size);
-  const size = n > 24 ? 4.2 : n > 14 ? 5 : n > 7 ? 6 : 7;   // hero width in % of the screen
+  const size = n > 24 ? 3.2 : n > 14 ? 3.6 : n > 7 ? 4.2 : 5;   // hero width in % of the screen
   $('#tokens').style.setProperty('--tw', size + '%');
   for (const p of players.values()) {
     let t = toks.get(p.pid);
@@ -239,8 +239,14 @@ function lobbyPos(p, i, n) {   // standing in the village square, in rows going 
   const cols = Math.min(n, n > 20 ? 12 : n > 10 ? 10 : 8), r = Math.floor(i / cols), c = i % cols, inRow = Math.min(cols, n - r * cols);
   return { x: 46 + (c - (inRow - 1) / 2) * (84 / cols) + (r % 2) * 3, y: GROUND - r * 14 };
 }
+let frameN = 0, stageH = 1, barH = 0;
 cam.onFrame((camY, t) => {
   if (phase === 'setup') return;
+  if (frameN++ % 30 === 0) {   // measured now and then, before this frame moves anything
+    const st = $('#worldStage').getBoundingClientRect();
+    stageH = st.height || 1; barH = $('.corner').getBoundingClientRect().bottom - st.top;
+    for (const k of toks.values()) k.h = k.el.offsetHeight;
+  }
   const ps = list(), n = ps.length;
   const order = phase === 'lobby' ? ps : ranked();
   order.forEach((p, i) => {
@@ -256,7 +262,9 @@ cam.onFrame((camY, t) => {
     const fr = heroFrame(t, p.lane, mood), hs = heroURL(p.char, { hat: p.hat, frame: fr });
     if (tk.src !== hs) { tk.hero.src = hs; tk.src = hs; }   // the hero animates: swinging legs, a blink, a cheer while climbing
     tk.el.style.left = x + '%';
-    tk.el.style.top = ((y - camY) / VH * 100).toFixed(2) + '%';
+    // on a fast climb the camera lags behind: keep the whole hero (balloons and name too) below the top bar meanwhile
+    const minTop = phase === 'lobby' ? -1 : Math.min(.6, ((tk.h || 0) + barH + 4) / stageH);
+    tk.el.style.top = (Math.max(minTop, (y - camY) / VH) * 100).toFixed(2) + '%';
     tk.el.style.zIndex = phase === 'lobby' ? 10 + Math.round(y) % 100 : 200 - i;
   });
   $('#rulerView').style.top = (camY / WH * 100).toFixed(2) + '%';
@@ -269,7 +277,7 @@ function drawRulerHeads() {
   $('#rulerHeads').innerHTML = ranked().map((p, i) => `<img class="px-img rh${i === 0 && p.alt > 0 ? ' lead' : ''}" style="top:${(altY(p.shown) / WH * 100).toFixed(2)}%;left:${(i % 3) * 30}%" src="${heroURL(p.char, { hat: p.hat })}" alt="">`).join('');
 }
 // the camera keeps the highest flyer in view, under the panels at the top of the screen
-function lookAtLeader(now) { const r = ranked(); const y = r.length ? altY(Math.max(...r.map((p) => p.shown))) : GROUND; cam.look(y - VH * .66, now); }   // below the panels at the top
+function lookAtLeader(now) { const r = ranked(); const y = r.length ? altY(Math.max(...r.map((p) => p.shown))) : GROUND; cam.look(y - VH * .8, now); }   // low enough that the balloons clear the clue panel at the top
 
 $('#tokens').addEventListener('click', (e) => {
   if (phase !== 'lobby') return;

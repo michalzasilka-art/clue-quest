@@ -9,7 +9,8 @@
 // shoot, a sleigh and a plane pass by.
 //
 // Positions are world units (320 wide, see world.js). Sizes are canvas pixels: there are 1 or 2 of them per world unit
-// and always about 2 CSS px on screen, so a bird or a raindrop looks the same size on a phone and on the class board.
+// and always about 2 CSS px on screen. On the class board (big: true) every art pixel is one world unit (U canvas
+// pixels), so birds, leaves and rain fill the same share of the sky as they do on a phone and read from the back row.
 
 const W = 320;
 const R = Math.random;
@@ -220,9 +221,11 @@ let sparkFrames = null;
 const sparks = () => sparkFrames || (sparkFrames = SPARK.map((r) => fromRows(r, { w: '#ffffff', y: '#fff2c0' })));
 
 // ======================================================================================================================
-export function createAmbient() {
+export function createAmbient({ big = false } = {}) {
   const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  let s = 0, last = 0, lastCam = null, built = false;
+  let s = 0, U = 1, last = 0, lastCam = null, built = false;   // U: canvas pixels per art pixel
+  const blit = (g, im, x, y) => g.drawImage(im, x, y, im.width * U, im.height * U);
+  const blitC = (g, im, x, y) => blit(g, im, x - ((im.width * U) >> 1), y - ((im.height * U) >> 1));
   const v = { t: 0, dt: 0, camY: 0, vh: 180, vw: W, x0: 0, cw: 320, ch: 180 };
   const X = (x) => Math.round((x - v.x0) * s), Y = (y) => Math.round((y - v.camY) * s);
   const seen = (y0, y1) => y1 > v.camY - 8 && y0 < v.camY + v.vh + 8;   // does the view show any of y0…y1?
@@ -302,6 +305,7 @@ export function createAmbient() {
     for (const c of storms) {
       c.x += (2 + wind.v * .25) * v.dt; c.a = fade;
       if (Math.abs(v.dcw) < 40) c.y = clamp(c.y + v.dcw * .75, 1380, 2120);   // far away: they keep up with a climbing camera, mostly (not with a jump)
+      { const hh = c.img.height / s, minY = v.camY + hh + v.vh * .03; if (c.y < minY) c.y = Math.min(2120, c.y + (minY - c.y) * Math.min(1, v.dt * 2.5)); }   // left above the view (it began in the forest): drift into sight
       if (c.a <= .01) continue;
       const h = c.img.height / s;
       // rain falls from the cloud's belly
@@ -330,9 +334,9 @@ export function createAmbient() {
       d.life -= v.dt; d.y += d.vy * v.dt; d.x += (2 + wind.v) * v.dt;
       if (d.life <= 0 || d.y > 2196) { drops[i] = drops[drops.length - 1]; drops.pop(); continue; }
       if (!onView(d.x, d.y, 10)) continue;
-      const x = X(d.x), y = Y(d.y), L = Math.max(2, d.len);
+      const x = X(d.x), y = Y(d.y), L = Math.max(2, d.len) * U;
       g.globalAlpha = step(Math.min(d.a, d.life * 4), 4);
-      for (let k = 0; k < L; k++) g.fillRect(Math.round(x - k * slant * 1.2), y - k, 1, 1);
+      for (let k = 0; k < L; k++) g.fillRect(Math.round(x - k * slant * 1.2), y - k, U, 1);
     }
     g.globalAlpha = 1;
     if (drops.length > 900) drops.splice(0, drops.length - 900);
@@ -414,8 +418,8 @@ export function createAmbient() {
       const gl = glints[i], f = (t - gl.t0) / gl.len;
       if (f >= 1) { glints.splice(i, 1); continue; }
       const a = Math.sin(Math.PI * f);
-      if (gl.kind === 'lake') { g.fillStyle = f < .5 ? '#ffffff' : '#dfe8ff'; g.globalAlpha = step(a * .85, 4); g.fillRect(X(gl.x), Y(gl.y), Math.max(1, Math.round(gl.w * s * (.6 + .4 * a))), 1); }
-      else { const fr = sparks()[Math.min(2, (a * 3) | 0)]; g.globalAlpha = 1; g.drawImage(fr, X(gl.x) - 2, Y(gl.y) - 2); }
+      if (gl.kind === 'lake') { g.fillStyle = f < .5 ? '#ffffff' : '#dfe8ff'; g.globalAlpha = step(a * .85, 4); g.fillRect(X(gl.x), Y(gl.y), Math.max(1, Math.round(gl.w * s * (.6 + .4 * a))), U); }
+      else { const fr = sparks()[Math.min(2, (a * 3) | 0)]; g.globalAlpha = 1; blitC(g, fr, X(gl.x), Y(gl.y)); }
     }
     g.globalAlpha = 1;
   }
@@ -449,7 +453,7 @@ export function createAmbient() {
       const tw = .5 + .5 * Math.sin(t / 380), d = disk(6 * s, '#fff0a8');
       g.globalAlpha = step(.16 * tw + .05, 32); g.drawImage(d, X(TREE_STAR.x) - (d.width >> 1), Y(TREE_STAR.y) - (d.height >> 1));
       g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
-      const fr = sparks()[tw > .66 ? 2 : tw > .33 ? 1 : 0]; g.drawImage(fr, X(TREE_STAR.x) - 2, Y(TREE_STAR.y) - 2);
+      const fr = sparks()[tw > .66 ? 2 : tw > .33 ? 1 : 0]; blitC(g, fr, X(TREE_STAR.x), Y(TREE_STAR.y));
     }
     // little lights on the tree blink in turn
     const cols = ['#ff6a7a', '#ffd24a', '#7af0a8', '#7ac8ff', '#ff9ae0'];
@@ -480,15 +484,15 @@ export function createAmbient() {
       const before = fox.x; fox.x += fox.dir * 15 * v.dt; fr = ((v.t / 140) | 0) % 2;
       if ((before - fox.sitAt) * (fox.x - fox.sitAt) <= 0 && !fox.done) { fox.sat = rnd(1.6, 2.8); fox.done = true; }
     }
-    const im = foxImgs[fr][fox.dir > 0 ? 'r' : 'l'], bob = fr === 1 ? -1 : 0;
-    g.drawImage(im, X(fox.x) - (im.width >> 1), Y(fox.y) - im.height + bob);
+    const im = foxImgs[fr][fox.dir > 0 ? 'r' : 'l'], bob = fr === 1 ? -U : 0;
+    blit(g, im, X(fox.x) - ((im.width * U) >> 1), Y(fox.y) - im.height * U + bob);
     if (fox.x < v.x0 - 30 || fox.x > v.x0 + v.vw + 30) { fox = null; foxNext = v.t + rnd(14000, 30000); }
   }
 
   // ---------- snow: three depths, leaning with the wind, thicker during a shower ----------
   let flakes = [];
   function buildSnow() {
-    flakes = Array.from({ length: Math.round(v.cw * v.ch / (calm ? 700 : 260)) }, () => newFlake(true));
+    flakes = Array.from({ length: Math.round(v.cw * v.ch / ((calm ? 700 : 260) * U * U)) }, () => newFlake(true));
   }
   function newFlake(anywhere) {
     const z = R(), depth = z < .55 ? .55 : z < .88 ? .85 : z < .985 ? 1.2 : 1.6;
@@ -505,9 +509,9 @@ export function createAmbient() {
       const wy = v.camY + f.y / s, dens = smooth(1930, 2130, wy) * .55 * thick;   // only near the forest
       if (f.r > dens) continue;
       const x = Math.round(f.x), y = Math.round(f.y);
-      if (f.depth >= 1.6) { g.globalAlpha = .95; g.fillStyle = '#ffffff'; g.fillRect(x - 1, y, 3, 1); g.fillRect(x, y - 1, 1, 3); }
-      else if (f.depth >= 1.2) { g.globalAlpha = .95; g.fillStyle = '#ffffff'; g.fillRect(x, y, 2, 2); }
-      else { g.globalAlpha = f.depth > .7 ? .9 : .55; g.fillStyle = f.depth > .7 ? '#ffffff' : '#e6e8fb'; g.fillRect(x, y, 1, 1); }
+      if (f.depth >= 1.6) { g.globalAlpha = .95; g.fillStyle = '#ffffff'; g.fillRect(x - U, y, 3 * U, U); g.fillRect(x, y - U, U, 3 * U); }
+      else if (f.depth >= 1.2) { g.globalAlpha = .95; g.fillStyle = '#ffffff'; g.fillRect(x, y, 2 * U, 2 * U); }
+      else { g.globalAlpha = f.depth > .7 ? .9 : .55; g.fillStyle = f.depth > .7 ? '#ffffff' : '#e6e8fb'; g.fillRect(x, y, U, U); }
     }
     g.globalAlpha = 1;
   }
@@ -517,7 +521,7 @@ export function createAmbient() {
   function drawLeaves(g, dcam) {
     const low = seen(1840, 2420);
     if (low && leaves.length < 26) {
-      if (!calm && wind.k > .12 && R() < wind.k * 9 * v.dt) { const y0 = Math.max(0, Y(1900)); if (y0 < v.ch - 10) leaves.push(newLeaf(-4, rnd(y0, v.ch * .95))); }
+      if (!calm && wind.k > .12 && R() < wind.k * 9 * v.dt) { const y0 = Math.max(0, Y(1900)); if (y0 < v.ch - 10) leaves.push(newLeaf(-5 * U, rnd(y0, v.ch * .95))); }
       if (seen(2200, 2340) && R() < .5 * v.dt) { const p = pick(PINES); leaves.push(newLeaf(X(rnd(p[0], p[1])), Y(rnd(p[2], p[2] + 50)))); }
     }
     for (let i = leaves.length - 1; i >= 0; i--) {
@@ -527,7 +531,7 @@ export function createAmbient() {
       l.y += ((9 + 5 * Math.sin(l.ph)) * l.depth + lift) * v.dt + dcam * l.depth;
       if (l.x > v.cw + 8 || l.y > v.ch + 8 || l.age > 30 || v.camY + l.y / s < 1830) { leaves.splice(i, 1); continue; }
       const fr = leafFrames(l.c)[((l.ph * 1.6) | 0) & 3];
-      g.drawImage(fr, Math.round(l.x), Math.round(l.y));
+      blit(g, fr, Math.round(l.x), Math.round(l.y));
     }
   }
   const newLeaf = (x, y) => ({ x, y, c: (R() * LEAF_COLS.length) | 0, ph: R() * 6, spin: rnd(2.5, 5), depth: rnd(.8, 1.3), age: 0 });
@@ -535,7 +539,7 @@ export function createAmbient() {
   // ---------- wind streaks: curly white lines that whoosh past in the gusts ----------
   const streaks = [];
   function newStreak() {
-    const pts = [], len = rnd(90, 170) * (v.cw / 320 + .4), loopAt = rnd(.35, .7) * len, r = rnd(3, 6), amp = rnd(1.5, 4), lam = rnd(14, 26);
+    const pts = [], len = rnd(90, 170) * (v.cw / 320 + .4), loopAt = rnd(.35, .7) * len, r = rnd(3, 6) * U, amp = rnd(1.5, 4) * U, lam = rnd(14, 26) * U;
     let looped = false;
     for (let u = 0; u < len; u += 1) {
       if (!looped && u >= loopAt) {   // one curl along the way
@@ -544,7 +548,7 @@ export function createAmbient() {
       }
       pts.push([u, amp * Math.sin(u / lam)]);
     }
-    return { pts, x: rnd(-60, v.cw * .55), y: rnd(v.ch * .06, v.ch * .8), t0: v.t, life: rnd(1200, 1900), tail: rnd(34, 60) | 0 };
+    return { pts, x: rnd(-60, v.cw * .55), y: rnd(v.ch * .06, v.ch * .8), t0: v.t, life: rnd(1200, 1900), tail: (rnd(34, 60) * U) | 0 };
   }
   function drawStreaks(g, dcam) {
     if (!calm && wind.k > .22 && streaks.length < 7 && R() < wind.k * 3.5 * v.dt) streaks.push(newStreak());
@@ -557,7 +561,7 @@ export function createAmbient() {
       for (let k = Math.max(0, head - st.tail); k < Math.min(head, st.pts.length); k++) {
         const along = (k - (head - st.tail)) / st.tail;
         g.globalAlpha = step(.8 * fade * along, 3); if (g.globalAlpha <= 0) continue;
-        g.fillRect(Math.round(st.x + st.pts[k][0]), Math.round(st.y + st.pts[k][1]), 1, 1);
+        g.fillRect(Math.round(st.x + st.pts[k][0]), Math.round(st.y + st.pts[k][1]), U, U);
       }
     }
     g.globalAlpha = 1;
@@ -582,7 +586,7 @@ export function createAmbient() {
       if (p.age > p.life) { dust[i] = dust[dust.length - 1]; dust.pop(); continue; }
       p.vy += p.g * v.dt; p.x += (p.vx + wind.v * .8) * v.dt; p.y += p.vy * v.dt;
       if (!onView(p.x, p.y, 4)) continue;
-      g.globalAlpha = step(p.a * (1 - p.age / p.life), 4); g.fillRect(X(p.x), Y(p.y), 1, 1);
+      g.globalAlpha = step(p.a * (1 - p.age / p.life), 4); g.fillRect(X(p.x), Y(p.y), U, U);
     }
     g.globalAlpha = 1;
     if (dust.length > 700) dust.splice(0, dust.length - 700);
@@ -648,7 +652,7 @@ export function createAmbient() {
         else f.x += f.dir * f.speed * v.dt + wind.v * .1 * v.dt;
         // mostly a glide, a few slow wing beats now and then
         const m = f.members[0], flap = Math.sin(t * .9 + f.ph) > .7, idx = flap ? fr.cycle[((t * 8) | 0) % fr.cycle.length] : fr.glide;
-        if (onView(f.x, f.y, 30)) g.drawImage(fr.f[idx], X(f.x + m.dx) - (fr.w >> 1), Y(f.y + m.dy) - (fr.h >> 1));
+        if (onView(f.x, f.y, 30)) blitC(g, fr.f[idx], X(f.x + m.dx), Y(f.y + m.dy));
       } else {
         f.x += (f.dir * f.speed + wind.v * .3) * v.dt;
         for (const m of f.members) {
@@ -661,7 +665,7 @@ export function createAmbient() {
             const glide = Math.sin(t * .8 + m.ph) > -.2; idx = glide ? fr.glide : fr.cycle[((t * 6 + m.ph) | 0) % fr.cycle.length]; bob = 2 * Math.sin(t * 1.3 + m.ph);
           } else { idx = fr.cycle[((t * 7 - m.ph * 2 + 60) | 0) % fr.cycle.length]; bob = 1.2 * Math.sin(t * 2 + m.ph); }
           const x = f.x + m.dx * f.dir, y = f.y + m.dy + bob;
-          if (onView(x, y, 12)) g.drawImage(fr.f[idx], X(x) - (fr.w >> 1), Y(y) - (fr.h >> 1));
+          if (onView(x, y, 12)) blitC(g, fr.f[idx], X(x), Y(y));
         }
       }
       if (f.x < v.x0 - 140 || f.x > v.x0 + v.vw + 140 || age > 60) flocks.splice(i, 1);
@@ -680,9 +684,9 @@ export function createAmbient() {
       b.x += (b.v + wind.v * .12) * v.dt; if (b.x > W + 20) b.x = -20;
       const y = b.y + 2.5 * Math.sin(v.t / 1700 + b.ph);
       if (!onView(b.x, y, 20)) continue;
-      g.drawImage(b.img, X(b.x) - (b.img.width >> 1), Y(y) - (b.img.height >> 1));
+      blitC(g, b.img, X(b.x), Y(y));
       // a puff of flame now and then
-      if (Math.sin(v.t / 600 + b.ph * 3) > .93) { g.fillStyle = '#ffd24a'; g.fillRect(X(b.x) - 1, Y(y) + (b.img.height >> 1) - 5, 2, 1); }
+      if (Math.sin(v.t / 600 + b.ph * 3) > .93) { g.fillStyle = '#ffd24a'; g.fillRect(X(b.x) - U, Y(y) + ((b.img.height >> 1) - 5) * U, 2 * U, U); }
     }
   }
 
@@ -750,7 +754,7 @@ export function createAmbient() {
     for (const st of stars) {
       if (!onView(st.x, st.y, 2)) continue;
       const tw = Math.sin(t / 1000 * st.sp + st.p); if (tw < .86) continue;
-      const x = X(st.x), y = Y(st.y), arm = st.big && tw > .97 ? 2 : 1;
+      const x = X(st.x), y = Y(st.y), arm = (st.big && tw > .97 ? 2 : 1) * U;
       g.globalAlpha = step((tw - .86) / .14, 3);
       g.fillRect(x - arm, y, arm * 2 + 1, 1); g.fillRect(x, y - arm, 1, arm * 2 + 1);
     }
@@ -764,8 +768,8 @@ export function createAmbient() {
       const sh = shooting[i], f = (t - sh.t0) / sh.life; if (f >= 1) { shooting.splice(i, 1); continue; }
       const k = (t - sh.t0) / 1000, hx = sh.x + sh.vx * k, hy = sh.y + sh.vy * k, n = 16, fade = Math.min(1, (1 - f) * 3);
       g.fillStyle = '#ffffff';
-      for (let j = 0; j < n; j++) { const b = j / n; g.globalAlpha = step(fade * (1 - b), 4); if (g.globalAlpha <= 0) continue; g.fillRect(X(hx - sh.vx * .00028 * j * 16 / s) , Y(hy - sh.vy * .00028 * j * 16 / s), 1, 1); }
-      g.globalAlpha = fade; g.fillRect(X(hx), Y(hy), 2, 1); g.fillRect(X(hx), Y(hy) - 1, 1, 2);
+      for (let j = 0; j < n; j++) { const b = j / n; g.globalAlpha = step(fade * (1 - b), 4); if (g.globalAlpha <= 0) continue; g.fillRect(X(hx - sh.vx * .00028 * j * 16 * U / s), Y(hy - sh.vy * .00028 * j * 16 * U / s), U, U); }
+      g.globalAlpha = fade; g.fillRect(X(hx), Y(hy), 2 * U, U); g.fillRect(X(hx), Y(hy) - U, U, 2 * U);
     }
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   }
@@ -784,13 +788,13 @@ export function createAmbient() {
       const y = SLEIGH_Y - (sleigh.x - v.x0) * .12 + 3 * Math.sin(t / 500);
       if (R() < .9) trail.push({ x: sleigh.x + rnd(-1, 2), y: y + rnd(2, 5), t0: t, life: rnd(700, 1500) });
       const img = sleighImgs[((t / 160) | 0) % 2];
-      g.drawImage(img, X(sleigh.x) - (img.width >> 1), Y(y) - (img.height >> 1));
+      blitC(g, img, X(sleigh.x), Y(y));
       if (sleigh.x > v.x0 + v.vw + 50) { sleigh = null; sleighNext = t + rnd(18000, 34000); }
     }
     for (let i = trail.length - 1; i >= 0; i--) {
       const p = trail[i], f = (t - p.t0) / p.life; if (f >= 1) { trail.splice(i, 1); continue; }
       p.y += 3 * v.dt; if (!onView(p.x, p.y, 4)) continue;
-      g.globalAlpha = step(1 - f, 4); g.fillStyle = (p.t0 / 90 | 0) % 3 ? '#ffe27a' : '#ffffff'; g.fillRect(X(p.x) - (sleighImgs[0].width >> 1) + 1, Y(p.y), 1, 1);
+      g.globalAlpha = step(1 - f, 4); g.fillStyle = (p.t0 / 90 | 0) % 3 ? '#ffe27a' : '#ffffff'; g.fillRect(X(p.x) - ((sleighImgs[0].width * U) >> 1) + U, Y(p.y), U, U);
     }
     g.globalAlpha = 1;
     if (!plane && t > planeNext && seen(PLANE_Y - 40, PLANE_Y + 40)) plane = { x: v.x0 + v.vw + 30, t0: t };
@@ -799,8 +803,8 @@ export function createAmbient() {
       const img = planeImgs[((t / 450) | 0) % 2], px = X(plane.x), py = Y(PLANE_Y);
       // contrail behind it, thinning out in steps
       g.fillStyle = '#ffffff';
-      for (let k = 0; k < 4; k++) { g.globalAlpha = .45 - k * .1; g.fillRect(px + (img.width >> 1) + Math.round(k * 22 * s), py + 1, Math.round(22 * s), 1); }
-      g.globalAlpha = 1; g.drawImage(img, px - (img.width >> 1), py - (img.height >> 1));
+      for (let k = 0; k < 4; k++) { g.globalAlpha = .45 - k * .1; g.fillRect(px + ((img.width * U) >> 1) + Math.round(k * 22 * s), py + U, Math.round(22 * s), U); }
+      g.globalAlpha = 1; blitC(g, img, px, py);
       if (plane.x < v.x0 - 140) { plane = null; planeNext = t + rnd(16000, 30000); }
     }
   }
@@ -845,7 +849,7 @@ export function createAmbient() {
       v.dt = last ? Math.min(.1, (view.t - last) / 1000) : 0; last = view.t;
       Object.assign(v, view);
       if (view.s !== s || !built) {
-        s = view.s; built = true; diskCache.clear();
+        s = view.s; U = big ? s : 1; built = true; diskCache.clear();
         buildClouds(); buildBow(); buildMist(); buildBalloons(); buildSnow(); storms = [];
       }
       if (!nightDone && slices) buildNight(slices, slicePx);
